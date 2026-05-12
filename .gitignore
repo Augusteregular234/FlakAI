@@ -1,0 +1,21 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/flak_ai.db
+backend/uploads/
+backend/clips/
+backend/routers/__pycache__/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Env
+.env.local
+.env
+
+# OS
+.DS_Store
+Thumbs.db
