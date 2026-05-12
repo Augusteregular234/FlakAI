@@ -12,6 +12,9 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 
+# Dataset generado (opcional: quitar esta línea si quieres versionar manifests pequeños)
+datasets/manifest.jsonl
+
 # Env
 .env.local
 .env

@@ -54,6 +54,12 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-2xl font-bold text-white">Mis Vídeos</h2>
           <p className="text-zinc-500 text-sm mt-1">{videos.length} partidos analizados</p>
+          <Link
+            href="/dashboard/review"
+            className="text-zinc-600 hover:text-emerald-400 text-xs mt-2 inline-block"
+          >
+            Revisión de clips · exportar etiquetas para entrenamiento →
+          </Link>
         </div>
         <Link href="/dashboard/upload">
           <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold">

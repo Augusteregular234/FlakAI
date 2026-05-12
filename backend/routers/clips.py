@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from auth import get_current_user
+from auth import require_active_team
 import models, schemas
 
 router = APIRouter(prefix="/api/clips", tags=["clips"])
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/clips", tags=["clips"])
 @router.get("/pending", response_model=list[schemas.EventClipOut])
 def get_pending_clips(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     clips = (
         db.query(models.EventClip)
@@ -30,7 +30,7 @@ def get_pending_clips(
 def get_clips_for_video(
     video_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     video = db.query(models.VideoMatch).filter(
         models.VideoMatch.id == video_id,
@@ -53,7 +53,7 @@ def review_clip(
     clip_id: int,
     data: schemas.ReviewUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     clip = db.query(models.EventClip).filter(
         models.EventClip.id == clip_id,
@@ -72,7 +72,7 @@ def review_clip(
 def stream_clip(
     clip_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     clip = db.query(models.EventClip).filter(
         models.EventClip.id == clip_id,

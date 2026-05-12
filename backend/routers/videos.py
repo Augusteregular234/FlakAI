@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from auth import get_current_user
+from auth import require_active_team
+from billing.subscription import PREMIUM_TIER, can_start_upload
 import models, schemas
 from ai_worker import process_video
 
@@ -21,7 +22,7 @@ os.makedirs(CHUNK_DIR, exist_ok=True)
 @router.get("/", response_model=list[schemas.VideoOut])
 def list_videos(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     videos = (
         db.query(models.VideoMatch)
@@ -45,8 +46,20 @@ def init_upload(
     filename: str = Form(...),
     file_size: int = Form(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
+    if not current_user.is_admin:
+        team = (
+            db.query(models.Team).filter(models.Team.id == current_user.team_id).first()
+        )
+        if not team:
+            raise HTTPException(status_code=403, detail="Equipo no encontrado")
+        if not can_start_upload(team):
+            raise HTTPException(
+                status_code=403,
+                detail="Has agotado el vídeo de prueba gratuito. Activa el plan premium para seguir subiendo vídeos.",
+            )
+
     upload_id = str(uuid.uuid4())
     safe_name = f"{upload_id}_{filename.replace(' ', '_')}"
     file_path = os.path.join(UPLOADS_DIR, safe_name)
@@ -76,7 +89,7 @@ async def upload_chunk(
     upload_id: str,
     chunk_index: int = Form(...),
     chunk: UploadFile = File(...),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     chunk_dir = os.path.join(CHUNK_DIR, upload_id)
     if not os.path.exists(chunk_dir):
@@ -94,7 +107,7 @@ async def complete_upload(
     upload_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     video = db.query(models.VideoMatch).filter(models.VideoMatch.upload_id == upload_id).first()
     if not video:
@@ -113,6 +126,13 @@ async def complete_upload(
     shutil.rmtree(chunk_dir, ignore_errors=True)
 
     video.status = models.VideoStatus.processing
+
+    team = (
+        db.query(models.Team).filter(models.Team.id == video.team_id).first()
+    )
+    if team and team.subscription_tier != PREMIUM_TIER:
+        team.trial_video_used = True
+
     db.commit()
 
     background_tasks.add_task(process_video, video.id)
@@ -124,7 +144,7 @@ async def complete_upload(
 def get_video(
     video_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_active_team),
 ):
     video = db.query(models.VideoMatch).filter(
         models.VideoMatch.id == video_id,

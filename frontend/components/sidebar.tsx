@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const baseNav = [
   { href: "/dashboard", label: "Mis Vídeos", icon: "▶" },
   { href: "/dashboard/upload", label: "Subir Vídeo", icon: "↑" },
   { href: "/dashboard/review", label: "Revisión", icon: "◉" },
@@ -31,7 +31,21 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map((item) => {
+        {user?.is_admin && (
+          <Link
+            href="/dashboard/admin"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-2",
+              pathname === "/dashboard/admin"
+                ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+            )}
+          >
+            <span className="text-base">⚙</span>
+            Admin · Equipos
+          </Link>
+        )}
+        {baseNav.map((item) => {
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
           return (
             <Link
@@ -51,7 +65,14 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="px-5 py-4 border-t border-zinc-800">
+      <div className="px-5 py-4 border-t border-zinc-800 space-y-2">
+        {team && team.status === "active" && team.subscription_tier !== "premium" && (
+          <p className="text-zinc-600 text-[10px] leading-snug px-1">
+            {team.trial_video_used
+              ? "Has usado el vídeo de prueba. Premium próximamente."
+              : "Te queda 1 vídeo de prueba gratuito."}
+          </p>
+        )}
         <p className="text-zinc-500 text-xs truncate mb-2">{user?.username}</p>
         <button
           onClick={handleLogout}

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { api, type EventClip } from "@/lib/api";
+import { useAuthStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -15,10 +16,12 @@ const CONFIDENCE_COLOR = (c: number) =>
   c >= 80 ? "text-emerald-400" : c >= 65 ? "text-yellow-400" : "text-red-400";
 
 export default function ReviewPage() {
+  const { user } = useAuthStore();
   const [clips, setClips] = useState<EventClip[]>([]);
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
+  const [exporting, setExporting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +46,20 @@ export default function ReviewPage() {
     return () => window.removeEventListener("keydown", handler);
   });
 
+  const runExport = async (
+    key: string,
+    fn: () => Promise<void>
+  ) => {
+    setExporting(key);
+    try {
+      await fn();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Error al exportar");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const handleReview = async (status: "approved" | "rejected") => {
     const clip = clips[current];
     if (!clip || reviewing) return;
@@ -61,12 +78,50 @@ export default function ReviewPage() {
 
   if (clips.length === 0) {
     return (
-      <div className="p-8 flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="p-8 flex flex-col items-center justify-center min-h-[60vh] max-w-lg mx-auto text-center">
         <div className="text-6xl mb-4">✅</div>
         <h2 className="text-xl font-bold text-white">Sin clips pendientes</h2>
-        <p className="text-zinc-500 text-sm mt-2">
-          Todos los clips han sido revisados
+        <p className="text-zinc-500 text-sm mt-2 mb-6">
+          Puedes exportar las etiquetas humanas (clips ya aceptados o rechazados) para entrenar modelos.
         </p>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <Button
+            variant="outline"
+            className="border-zinc-700 text-zinc-300"
+            disabled={!!exporting}
+            onClick={() => runExport("tj", () => api.exportLabels.teamJsonl())}
+          >
+            {exporting === "tj" ? "…" : "Exportar equipo JSONL"}
+          </Button>
+          <Button
+            variant="outline"
+            className="border-zinc-700 text-zinc-300"
+            disabled={!!exporting}
+            onClick={() => runExport("tc", () => api.exportLabels.teamCsv())}
+          >
+            {exporting === "tc" ? "…" : "Exportar equipo CSV"}
+          </Button>
+          {user?.is_admin && (
+            <>
+              <Button
+                variant="outline"
+                className="border-amber-900/50 text-amber-400/90"
+                disabled={!!exporting}
+                onClick={() => runExport("aj", () => api.exportLabels.adminJsonl())}
+              >
+                {exporting === "aj" ? "…" : "Admin · JSONL global"}
+              </Button>
+              <Button
+                variant="outline"
+                className="border-amber-900/50 text-amber-400/90"
+                disabled={!!exporting}
+                onClick={() => runExport("ac", () => api.exportLabels.adminCsv())}
+              >
+                {exporting === "ac" ? "…" : "Admin · CSV global"}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -75,12 +130,46 @@ export default function ReviewPage() {
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white">Revisión de Clips</h2>
           <p className="text-zinc-500 text-sm mt-1">
-            {current + 1} / {clips.length} pendientes · Usa ← → para navegar · A=Aceptar · R=Rechazar
+            {current + 1} / {clips.length} pendientes · ← → · A=Aceptar · R=Rechazar
           </p>
+          <p className="text-zinc-600 text-xs mt-2 max-w-xl">
+            Cada aceptar/rechazar es una etiqueta humana. Exporta al finalizar para dataset de entrenamiento.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-zinc-700 text-zinc-400 text-xs"
+            disabled={!!exporting}
+            onClick={() => runExport("tj", () => api.exportLabels.teamJsonl())}
+          >
+            {exporting === "tj" ? "…" : "Etiquetas JSONL"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-zinc-700 text-zinc-400 text-xs"
+            disabled={!!exporting}
+            onClick={() => runExport("tc", () => api.exportLabels.teamCsv())}
+          >
+            {exporting === "tc" ? "…" : "Etiquetas CSV"}
+          </Button>
+          {user?.is_admin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-amber-900/40 text-amber-500/90 text-xs"
+              disabled={!!exporting}
+              onClick={() => runExport("aj", () => api.exportLabels.adminJsonl())}
+            >
+              {exporting === "aj" ? "…" : "Admin JSONL"}
+            </Button>
+          )}
         </div>
       </div>
 

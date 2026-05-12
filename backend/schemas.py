@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
-from models import VideoStatus, EventType, ReviewStatus
+from models import VideoStatus, EventType, ReviewStatus, TeamStatus
 
 
 class TeamCreate(BaseModel):
@@ -11,12 +11,17 @@ class TeamCreate(BaseModel):
 class TeamOut(BaseModel):
     id: int
     name: str
+    status: TeamStatus
+    requested_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    trial_video_used: bool = False
+    subscription_tier: str = "free_trial"
     model_config = {"from_attributes": True}
 
 
 class UserCreate(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     password: str
     team_name: str
 
@@ -26,7 +31,13 @@ class UserOut(BaseModel):
     username: str
     email: str
     team_id: int
+    is_admin: bool = False
     model_config = {"from_attributes": True}
+
+
+class MeResponse(BaseModel):
+    user: UserOut
+    team: TeamOut
 
 
 class Token(BaseModel):
@@ -46,6 +57,7 @@ class VideoOut(BaseModel):
     filename: str
     original_name: str
     file_size: int
+    duration_seconds: Optional[float] = None
     status: VideoStatus
     upload_id: str
     created_at: datetime
@@ -63,6 +75,7 @@ class EventClipOut(BaseModel):
     confidence: float
     clip_filename: Optional[str] = None
     review_status: ReviewStatus
+    model_version: Optional[str] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 

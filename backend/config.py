@@ -1,0 +1,57 @@
+"""
+Configuración centralizada (12-factor). Usar variables de entorno o archivo `.env` en `backend/`.
+"""
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).resolve().parent / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Base de datos (SQLite MVP; en producción: postgresql+psycopg://...)
+    database_url: str = "sqlite:///./flak_ai.db"
+
+    jwt_secret: str = "flakAI-secret-key-change-in-production-2024"
+
+    # FFmpeg: vacío = buscar en PATH (recomendado en servidores Linux).
+    ffmpeg_path: str = ""
+    ffprobe_path: str = ""
+
+    # Carpeta local con vídeos brutos para entrenamiento / manifiesto (no se copian al repo).
+    dataset_videos_dir: str = r"C:\Users\saamu\Videos\analisisia"
+
+    # Manifiesto generado por scripts/build_dataset_manifest.py (relativo a la raíz del repo).
+    dataset_manifest_path: str = "datasets/manifest.jsonl"
+
+    # Detector: solo `mock` incluido; sustituir por onnx/torch servicio externo.
+    detector_backend: str = "mock"
+    model_version: str = "mock-1.0.0"
+
+    clip_window_seconds: float = 30.0
+    auto_approve_confidence: float = 80.0
+
+    mock_events_min: int = 3
+    mock_events_max: int = 5
+    # Mínimo de segundos entre eventos mock (evita solapamiento de clips).
+    mock_min_gap_seconds: float = 35.0
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+def manifest_path_resolved() -> Path:
+    """Ruta absoluta al archivo manifest JSONL."""
+    s = get_settings()
+    raw = Path(s.dataset_manifest_path)
+    if raw.is_absolute():
+        return raw
+    repo_root = Path(__file__).resolve().parent.parent
+    return (repo_root / raw).resolve()

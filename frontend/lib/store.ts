@@ -7,6 +7,7 @@ interface AuthState {
   user: AuthResponse["user"] | null;
   team: AuthResponse["team"] | null;
   setAuth: (data: AuthResponse) => void;
+  setProfile: (user: AuthResponse["user"], team: AuthResponse["team"]) => void;
   logout: () => void;
 }
 
@@ -20,11 +21,15 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem("flakai_token", data.access_token);
         set({ token: data.access_token, user: data.user, team: data.team });
       },
+      setProfile: (user, team) => set({ user, team }),
       logout: () => {
         localStorage.removeItem("flakai_token");
         set({ token: null, user: null, team: null });
       },
     }),
-    { name: "flakai-auth", partialize: (s) => ({ token: s.token, user: s.user, team: s.team }) }
+    {
+      name: "flakai-auth",
+      partialize: (s) => ({ token: s.token, user: s.user, team: s.team }),
+    }
   )
 );
