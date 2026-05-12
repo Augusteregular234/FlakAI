@@ -8,6 +8,7 @@ backend/clips/
 backend/routers/__pycache__/
 
 # Node
+node_modules/
 frontend/node_modules/
 frontend/.next/
 frontend/out/

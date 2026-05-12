@@ -1,0 +1,16 @@
+{
+  "name": "flakai-v2",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"API,WEB\" -c \"green,cyan\" --kill-others-on-fail \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && venv\\Scripts\\python.exe -m uvicorn main:app --reload --port 8000",
+    "frontend": "cd frontend && npm run dev",
+    "install:backend": "cd backend && venv\\Scripts\\pip.exe install -r requirements.txt",
+    "install:frontend": "cd frontend && npm install",
+    "setup": "npm run install:backend && npm run install:frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # Mínimo de segundos entre eventos mock (evita solapamiento de clips).
     mock_min_gap_seconds: float = 35.0
 
+    # Stripe — añadir en .env (no commitear)
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id_pro: str = ""
+    stripe_price_id_club: str = ""
+    app_url: str = "http://localhost:3000"
+
 
 @lru_cache
 def get_settings() -> Settings:

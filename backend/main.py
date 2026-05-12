@@ -11,7 +11,7 @@ from database import engine, run_sqlite_migrations
 import models
 from rate_limit import limiter
 from config import get_settings
-from routers import admin, auth, clips, export_reviewed, ml_admin, videos
+from routers import admin, auth, billing, clips, export_reviewed, ml_admin, videos
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,6 +49,7 @@ app.include_router(export_reviewed.router_team)
 app.include_router(export_reviewed.router_admin)
 app.include_router(videos.router)
 app.include_router(clips.router)
+app.include_router(billing.router)
 
 
 @app.get("/health")

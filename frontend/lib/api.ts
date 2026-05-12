@@ -142,6 +142,16 @@ export const api = {
       }),
     streamUrl: (clipId: number) => `${BASE_URL}/api/clips/${clipId}/stream`,
   },
+  billing: {
+    plans: () => request<BillingPlans>("/api/billing/plans"),
+    createCheckout: (tier: "pro" | "club") =>
+      request<{ url: string }>("/api/billing/create-checkout-session", {
+        method: "POST",
+        body: JSON.stringify({ tier }),
+      }),
+    createPortal: () =>
+      request<{ url: string }>("/api/billing/create-portal-session", { method: "POST" }),
+  },
   /** Etiquetas humanas = clips con decisión Aceptar/Rechazar (no pendientes). */
   exportLabels: {
     teamJsonl: () =>
@@ -216,6 +226,21 @@ export interface MlAdminSummary {
   manifest_exists: boolean;
   clip_window_seconds: number;
   auto_approve_confidence: number;
+}
+
+export interface BillingPlan {
+  tier: string;
+  label: string;
+  price_eur: number;
+  video_limit: number | null;
+  features: string[];
+  cta: string | null;
+  recommended?: boolean;
+}
+
+export interface BillingPlans {
+  current_tier: string;
+  plans: BillingPlan[];
 }
 
 export interface EventClip {
