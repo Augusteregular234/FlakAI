@@ -117,6 +117,7 @@ async def _do_process(video_id: int) -> None:
                 detector_metadata=meta,
             )
             db.add(clip)
+            db.commit()  # commit each clip immediately so it appears in the UI
 
         video.status = models.VideoStatus.completed
         video.processed_at = datetime.utcnow()
