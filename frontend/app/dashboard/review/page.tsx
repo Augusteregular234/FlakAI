@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api, type EventClip } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export default function ReviewPage() {
   const [reviewing, setReviewing] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -174,11 +175,14 @@ export default function ReviewPage() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
             <video
               key={clip.id}
+              ref={videoRef}
               src={api.clips.streamUrl(clip.id)}
               controls
               autoPlay
               playsInline
+              muted
               className="w-full aspect-video bg-black"
+              onLoadedData={() => { if (videoRef.current) videoRef.current.playbackRate = 2; }}
               onError={(e) => console.error("Video error", e.currentTarget.error?.code, e.currentTarget.src)}
             />
           </div>

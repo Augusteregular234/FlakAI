@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     model_version: str = "mock-1.0.0"
 
     # Duración total del clip centrado en el evento (window/2 antes y window/2 después)
-    clip_window_seconds: float = 60.0
+    clip_window_seconds: float = 10.0
     auto_approve_confidence: float = 80.0
 
     # Mock detector: mínimo de eventos (escala automáticamente con la duración del vídeo)
