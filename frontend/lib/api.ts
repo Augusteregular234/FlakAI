@@ -135,10 +135,10 @@ export const api = {
   clips: {
     pending: () => request<EventClip[]>("/api/clips/pending"),
     forVideo: (videoId: number) => request<EventClip[]>(`/api/clips/video/${videoId}`),
-    review: (clipId: number, status: "approved" | "rejected") =>
+    review: (clipId: number, status: "approved" | "rejected", eventType?: string) =>
       request<EventClip>(`/api/clips/${clipId}/review`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(eventType ? { event_type: eventType } : {}) }),
       }),
     streamUrl: (clipId: number) => {
       const token = getToken();

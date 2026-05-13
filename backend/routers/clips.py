@@ -63,6 +63,8 @@ def review_clip(
         raise HTTPException(status_code=404, detail="Clip not found")
 
     clip.review_status = data.status
+    if data.event_type is not None:
+        clip.event_type = data.event_type
     db.commit()
     db.refresh(clip)
     return clip

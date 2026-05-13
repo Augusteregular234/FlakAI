@@ -82,3 +82,4 @@ class EventClipOut(BaseModel):
 
 class ReviewUpdate(BaseModel):
     status: ReviewStatus
+    event_type: Optional[EventType] = None  # si se reclasifica a otro tipo
