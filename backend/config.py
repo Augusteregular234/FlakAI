@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     stripe_price_id_club: str = ""
     app_url: str = "http://localhost:3000"
 
+    # ── ML / PyTorch detector ────────────────────────────────────────────
+    # Stride en segundos entre ventanas de detección (menor = más preciso, más lento)
+    torch_detection_stride: float = 5.0
+    # Confianza mínima (%) para emitir un evento (0-100)
+    torch_detection_threshold: float = 40.0
+    # Ventana NMS: suprimir detecciones del mismo tipo dentro de N segundos
+    torch_nms_window: float = 20.0
+    # Número de frames a extraer por ventana
+    torch_n_frames: int = 16
+
 
 @lru_cache
 def get_settings() -> Settings:

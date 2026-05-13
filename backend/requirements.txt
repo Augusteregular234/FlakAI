@@ -1,3 +1,4 @@
+# Web framework
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.36
@@ -10,3 +11,10 @@ python-multipart==0.0.12
 aiofiles==24.1.0
 slowapi==0.1.9
 email-validator>=2.0.0
+
+# ML / Training (optional — only needed when DETECTOR_BACKEND=torch|onnx)
+# Install CPU-only PyTorch: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+numpy>=1.24
+scikit-learn>=1.3
+pillow>=10.0
+onnxruntime>=1.16

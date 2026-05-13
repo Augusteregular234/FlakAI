@@ -20,6 +20,20 @@ datasets/manifest.jsonl
 .env.local
 .env
 
+# ML checkpoints (large files — track .pt manually when needed)
+models/*.pt
+models/*.onnx
+models/training_metrics.json
+models/training_history.json
+models/incremental_metrics.json
+models/training_status.json
+models/active_model.txt
+models/onnx_export_meta.json
+checkpoints/*.pt
+
+# Torch model cache
+*.pth
+
 # OS
 .DS_Store
 Thumbs.db
