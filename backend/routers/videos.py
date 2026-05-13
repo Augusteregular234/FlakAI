@@ -55,11 +55,9 @@ def init_upload(
         )
         if not team:
             raise HTTPException(status_code=403, detail="Equipo no encontrado")
-        if not can_start_upload(team):
-            raise HTTPException(
-                status_code=403,
-                detail="Has agotado el vídeo de prueba gratuito. Activa el plan premium para seguir subiendo vídeos.",
-            )
+        allowed, reason = can_start_upload(team)
+        if not allowed:
+            raise HTTPException(status_code=403, detail=reason)
 
     upload_id = str(uuid.uuid4())
     safe_name = f"{upload_id}_{filename.replace(' ', '_')}"

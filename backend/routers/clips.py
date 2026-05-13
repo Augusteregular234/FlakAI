@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from auth import require_active_team
+from auth import require_active_team, get_user_any_token
 import models, schemas
 
 router = APIRouter(prefix="/api/clips", tags=["clips"])
@@ -72,8 +72,9 @@ def review_clip(
 def stream_clip(
     clip_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_active_team),
+    current_user: models.User = Depends(get_user_any_token),
 ):
+    """Soporta auth via header Y via ?token= para que <video src> funcione en el navegador."""
     clip = db.query(models.EventClip).filter(
         models.EventClip.id == clip_id,
         models.EventClip.team_id == current_user.team_id,
@@ -81,6 +82,10 @@ def stream_clip(
     if not clip or not clip.clip_path:
         raise HTTPException(status_code=404, detail="Clip not found")
     if not os.path.exists(clip.clip_path):
-        raise HTTPException(status_code=404, detail="Clip file not found")
+        raise HTTPException(status_code=404, detail=f"Clip file missing on disk: {clip.clip_filename}")
 
-    return FileResponse(clip.clip_path, media_type="video/mp4")
+    return FileResponse(
+        clip.clip_path,
+        media_type="video/mp4",
+        headers={"Accept-Ranges": "bytes"},
+    )

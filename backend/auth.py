@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
@@ -15,6 +15,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -34,26 +35,41 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
-) -> models.User:
-    credentials_exception = HTTPException(
+def _decode_jwt(token: str, db: Session) -> models.User:
+    exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
+        user_id = payload.get("sub")
         if user_id is None:
-            raise credentials_exception
+            raise exc
     except JWTError:
-        raise credentials_exception
-
+        raise exc
     user = db.query(models.User).filter(models.User.id == int(user_id)).first()
     if user is None:
-        raise credentials_exception
+        raise exc
     return user
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> models.User:
+    return _decode_jwt(token, db)
+
+
+def get_user_any_token(
+    header_token: Optional[str] = Depends(oauth2_scheme_optional),
+    query_token: Optional[str] = Query(None, alias="token"),
+    db: Session = Depends(get_db),
+) -> models.User:
+    """Acepta JWT desde Authorization header O query param ?token= (necesario para <video src>)."""
+    tok = header_token or query_token
+    if not tok:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return _decode_jwt(tok, db)
 
 
 def get_current_admin(

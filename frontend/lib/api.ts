@@ -140,7 +140,11 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
-    streamUrl: (clipId: number) => `${BASE_URL}/api/clips/${clipId}/stream`,
+    streamUrl: (clipId: number) => {
+      const token = getToken();
+      const query = token ? `?token=${encodeURIComponent(token)}` : "";
+      return `${BASE_URL}/api/clips/${clipId}/stream${query}`;
+    },
   },
   billing: {
     plans: () => request<BillingPlans>("/api/billing/plans"),

@@ -33,13 +33,15 @@ class Settings(BaseSettings):
     detector_backend: str = "mock"
     model_version: str = "mock-1.0.0"
 
-    clip_window_seconds: float = 30.0
+    # Duración total del clip centrado en el evento (window/2 antes y window/2 después)
+    clip_window_seconds: float = 60.0
     auto_approve_confidence: float = 80.0
 
-    mock_events_min: int = 3
-    mock_events_max: int = 5
-    # Mínimo de segundos entre eventos mock (evita solapamiento de clips).
-    mock_min_gap_seconds: float = 35.0
+    # Mock detector: mínimo de eventos (escala automáticamente con la duración del vídeo)
+    mock_events_min: int = 5
+    mock_events_max: int = 500  # límite de seguridad, raramente alcanzado
+    # Mínimo de segundos entre eventos mock (permite eventos consecutivos como córners seguidos)
+    mock_min_gap_seconds: float = 20.0
 
     # Stripe — añadir en .env (no commitear)
     stripe_secret_key: str = ""

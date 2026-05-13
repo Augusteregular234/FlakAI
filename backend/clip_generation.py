@@ -34,11 +34,14 @@ def generate_clip(
     clip_path = os.path.join(clips_dir, clip_filename)
     s = get_settings()
     window = float(s.clip_window_seconds)
-    start = max(0.0, event_timestamp - window)
+
+    # Centrar el clip: mostrar (window/2) segundos ANTES y DESPUÉS del evento
+    half = window / 2.0
+    start = max(0.0, event_timestamp - half)
 
     ffmpeg = resolve_ffmpeg_path()
     if not ffmpeg:
-        logger.warning("ffmpeg no encontrado; clip dummy")
+        logger.warning("ffmpeg no encontrado; generando clip dummy para %s", clip_filename)
         _create_dummy_clip(ffmpeg, clip_path)
         return clip_path
 
@@ -50,35 +53,34 @@ def generate_clip(
     cmd = [
         ffmpeg,
         "-y",
-        "-ss",
-        str(start),
-        "-i",
-        video_path,
-        "-t",
-        str(window),
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-c:a",
-        "aac",
-        "-movflags",
-        "+faststart",
+        "-ss", str(start),
+        "-i", video_path,
+        "-t", str(window),
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
         clip_path,
     ]
 
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=120)
         if result.returncode == 0 and os.path.exists(clip_path):
+            size_kb = os.path.getsize(clip_path) // 1024
+            logger.info(
+                "generate_clip OK: %s (start=%.1fs, window=%.1fs, size=%dKB)",
+                clip_filename, start, window, size_kb,
+            )
             return clip_path
-        logger.warning("ffmpeg falló: %s", result.stderr[-500:] if result.stderr else "")
+        err = result.stderr[-500:].decode(errors="replace") if result.stderr else ""
+        logger.warning("ffmpeg falló (rc=%d) para %s: %s", result.returncode, clip_filename, err)
     except subprocess.TimeoutExpired:
-        logger.warning("generate_clip: ffmpeg timeout (120s) para %s", clip_filename)
+        logger.warning("generate_clip: timeout 120s para %s", clip_filename)
     except Exception as e:
-        logger.exception("generate_clip: %s", e)
+        logger.exception("generate_clip error para %s: %s", clip_filename, e)
 
+    logger.warning("generate_clip: usando clip dummy para %s", clip_filename)
     _create_dummy_clip(ffmpeg, clip_path)
     return clip_path
 

@@ -175,13 +175,18 @@ export default function ReviewPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden relative">
             <video
               key={clip.id}
               src={api.clips.streamUrl(clip.id)}
               controls
               autoPlay
+              playsInline
               className="w-full aspect-video bg-black"
+              onError={(e) => {
+                const v = e.currentTarget;
+                console.error("Video error", v.error?.code, v.error?.message, v.src);
+              }}
             />
           </div>
 
