@@ -57,14 +57,21 @@ def run(args: argparse.Namespace) -> dict:
     model, ckpt_meta = load_checkpoint(base_path)
     base_version = ckpt_meta.get("version", 0)
 
-    # ── Find new samples (reviewed after last training) ───────────────────
+    # ── Find new samples using persistent dataset state ───────────────────
     all_samples = load_from_db()
     if not all_samples:
         logger.warning("No reviewed clips found.")
         return {"error": "no_data", "samples": 0}
 
-    # Filter to samples newer than last training if we have a clip_id watermark
-    last_clip_id = ckpt_meta.get("last_clip_id", 0)
+    # Watermark stored in models/dataset_state.json (not inside checkpoint)
+    state_path = REPO / "models" / "dataset_state.json"
+    state = {}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text())
+        except Exception:
+            pass
+    last_clip_id = state.get("last_trained_clip_id", 0)
     new_samples = [s for s in all_samples if s.clip_id > last_clip_id]
 
     if len(new_samples) < args.min_new:
@@ -136,13 +143,21 @@ def run(args: argparse.Namespace) -> dict:
     # ── Save new version ──────────────────────────────────────────────────
     version = next_version(models_dir)
     out_path = models_dir / f"event_classifier_v{version}.pt"
-    last_id = max((s.clip_id for s in new_samples), default=0)
     save_checkpoint(out_path, model, args.epochs, {
         "val_f1": best_f1,
         "base_version": base_version,
-        "last_clip_id": last_id,
     }, ckpt_meta.get("freeze_backbone", True))
     (models_dir / "active_model.txt").write_text(str(out_path))
+
+    # Update persistent dataset state (independent of checkpoint)
+    last_id = max((s.clip_id for s in new_samples), default=last_clip_id)
+    import time as _time
+    state.update({
+        "last_trained_clip_id": last_id,
+        "total_trained_samples": state.get("total_trained_samples", 0) + len(new_samples),
+        "last_training_run": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    state_path.write_text(json.dumps(state, indent=2))
 
     result = {
         "version": version, "base_version": base_version,

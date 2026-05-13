@@ -98,8 +98,14 @@ def run(args: argparse.Namespace) -> dict:
     logger.info("Device: %s", device)
 
     freeze = len(samples) < args.unfreeze_after
-    model = EventClassifier(freeze_backbone=freeze).to(device)
-    logger.info("Backbone %s", "FROZEN (head-only)" if freeze else "UNFROZEN (full fine-tune)")
+    model = EventClassifier(
+        backbone=args.backbone,
+        pooling=args.pooling,
+        head=args.head,
+        freeze_backbone=freeze,
+    ).to(device)
+    logger.info("Architecture: backbone=%s  pooling=%s  head=%s  frozen=%s",
+                args.backbone, args.pooling, args.head, freeze)
 
     optimizer = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -176,8 +182,26 @@ def run(args: argparse.Namespace) -> dict:
     shutil.copy(best_ckpt_path, final_path)
     logger.info("Saved best model → %s", final_path)
 
-    # Active model pointer
     (models_dir / "active_model.txt").write_text(str(final_path))
+
+    # Update persistent dataset state
+    last_id = max((s.clip_id for s in samples), default=0)
+    state_path = models_dir / "dataset_state.json"
+    state = {}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text())
+        except Exception:
+            pass
+    state.update({
+        "last_trained_clip_id": last_id,
+        "total_trained_samples": len(samples),
+        "last_training_run": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "backbone": args.backbone,
+        "pooling": args.pooling,
+        "head": args.head,
+    })
+    state_path.write_text(json.dumps(state, indent=2))
 
     metrics_out = {
         "version": version,
@@ -209,6 +233,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--cpu", action="store_true", help="Force CPU even if GPU available")
     p.add_argument("--from-jsonl", default=None, dest="from_jsonl",
                    help="Load from exported JSONL instead of live DB")
+    p.add_argument("--backbone", default="mobilenet_v3_small",
+                   choices=["mobilenet_v3_small","efficientnet_b2","efficientnet_b3","resnet50","convnext_tiny"])
+    p.add_argument("--pooling", default="mean",
+                   choices=["mean","attention","lstm","transformer"])
+    p.add_argument("--head", default="mlp",
+                   choices=["mlp","linear","deep_mlp"])
     return p.parse_args()
 
 

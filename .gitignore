@@ -29,6 +29,7 @@ models/incremental_metrics.json
 models/training_status.json
 models/active_model.txt
 models/onnx_export_meta.json
+models/dataset_state.json
 checkpoints/*.pt
 
 # Torch model cache
