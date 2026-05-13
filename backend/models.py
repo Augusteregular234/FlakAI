@@ -17,6 +17,8 @@ class EventType(str, enum.Enum):
     corner = "corner"
     throw_in = "throw_in"
     foul = "foul"
+    goal_kick = "goal_kick"
+    shot_on_target = "shot_on_target"
 
 
 class ReviewStatus(str, enum.Enum):

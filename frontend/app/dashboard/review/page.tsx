@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const EVENT_LABELS: Record<string, { icon: string; label: string; key: string }> = {
-  goal:     { icon: "⚽", label: "Gol",           key: "1" },
-  corner:   { icon: "🚩", label: "Córner",        key: "2" },
-  throw_in: { icon: "🤾", label: "Saque de Banda", key: "3" },
-  foul:     { icon: "🟨", label: "Falta",          key: "4" },
+  goal:            { icon: "⚽", label: "Gol",              key: "1" },
+  corner:          { icon: "🚩", label: "Córner",           key: "2" },
+  throw_in:        { icon: "🤾", label: "Saque de Banda",   key: "3" },
+  foul:            { icon: "🟨", label: "Falta",            key: "4" },
+  goal_kick:       { icon: "🥅", label: "Saque de Portería", key: "5" },
+  shot_on_target:  { icon: "🎯", label: "Tiro a Portería",  key: "6" },
 };
 const EVENT_KEYS = Object.entries(EVENT_LABELS);
 
@@ -46,11 +48,13 @@ export default function ReviewPage() {
       if (e.key === "ArrowLeft")  setCurrent((c) => Math.max(c - 1, 0));
       if (e.key === "a" || e.key === "A") handleReview("approved");
       if (e.key === "r" || e.key === "R") handleReview("rejected");
-      // 1-4: reclassify + approve
+      // 1-6: reclassify + approve
       if (e.key === "1") handleReclassify("goal");
       if (e.key === "2") handleReclassify("corner");
       if (e.key === "3") handleReclassify("throw_in");
       if (e.key === "4") handleReclassify("foul");
+      if (e.key === "5") handleReclassify("goal_kick");
+      if (e.key === "6") handleReclassify("shot_on_target");
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -180,7 +184,6 @@ export default function ReviewPage() {
               controls
               autoPlay
               playsInline
-              muted
               className="w-full aspect-video bg-black"
               onLoadedData={() => { if (videoRef.current) videoRef.current.playbackRate = 2; }}
               onError={(e) => console.error("Video error", e.currentTarget.error?.code, e.currentTarget.src)}
@@ -204,7 +207,7 @@ export default function ReviewPage() {
             <p className="text-zinc-500 text-xs mb-3 font-medium uppercase tracking-wide">
               Reclasificar y aceptar como…
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {EVENT_KEYS.map(([type, { icon, label, key }]) => {
                 const isCurrentType = clip.event_type === type;
                 return (
@@ -233,7 +236,7 @@ export default function ReviewPage() {
 
           {/* Keyboard hint */}
           <div className="flex flex-wrap gap-2 text-xs text-zinc-600">
-            {[["←→", "navegar"], ["A", "aceptar"], ["R", "rechazar"], ["1", "⚽ Gol"], ["2", "🚩 Córner"], ["3", "🤾 Saque"], ["4", "🟨 Falta"]].map(([k, desc]) => (
+            {[["←→", "navegar"], ["A", "aceptar"], ["R", "rechazar"], ["1", "⚽ Gol"], ["2", "🚩 Córner"], ["3", "🤾 Banda"], ["4", "🟨 Falta"], ["5", "🥅 S.Port."], ["6", "🎯 Tiro"]].map(([k, desc]) => (
               <span key={k} className="bg-zinc-900 border border-zinc-800 px-2 py-1 rounded">
                 <kbd className="text-zinc-400 font-mono">{k}</kbd>
                 <span className="ml-1 text-zinc-600">{desc}</span>

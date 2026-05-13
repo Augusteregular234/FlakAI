@@ -17,12 +17,14 @@ logger = logging.getLogger(__name__)
 
 # Tasa realista de eventos por minuto en un partido de fútbol
 _EVENT_RATES: dict[models.EventType, float] = {
-    models.EventType.throw_in: 0.42,   # ~38/90 min
-    models.EventType.foul:     0.31,   # ~28/90 min
-    models.EventType.corner:   0.12,   # ~11/90 min
-    models.EventType.goal:     0.04,   # ~3.6/90 min
+    models.EventType.throw_in:       0.42,   # ~38/90 min
+    models.EventType.foul:           0.31,   # ~28/90 min
+    models.EventType.goal_kick:      0.22,   # ~20/90 min
+    models.EventType.corner:         0.12,   # ~11/90 min
+    models.EventType.shot_on_target: 0.08,   # ~7/90 min
+    models.EventType.goal:           0.04,   # ~3.6/90 min
 }
-_TOTAL_RATE = sum(_EVENT_RATES.values())   # ~0.89 eventos/min
+_TOTAL_RATE = sum(_EVENT_RATES.values())   # ~1.19 eventos/min
 
 
 class MockEventDetector:
@@ -73,13 +75,16 @@ class MockEventDetector:
 
             evt_type: models.EventType = rng.choices(event_types, weights=weights)[0]
 
-            # Goles tienen confianza más alta; saques más baja (más difíciles de detectar)
             if evt_type == models.EventType.goal:
                 conf = rng.uniform(72.0, 99.0)
             elif evt_type == models.EventType.corner:
                 conf = rng.uniform(65.0, 98.0)
+            elif evt_type == models.EventType.shot_on_target:
+                conf = rng.uniform(60.0, 95.0)
             elif evt_type == models.EventType.foul:
                 conf = rng.uniform(55.0, 94.0)
+            elif evt_type == models.EventType.goal_kick:
+                conf = rng.uniform(55.0, 90.0)
             else:
                 conf = rng.uniform(50.0, 92.0)
 
