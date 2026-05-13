@@ -17,9 +17,19 @@ logger = logging.getLogger(__name__)
 
 CLIPS_DIR = os.path.join(os.path.dirname(__file__), "clips")
 
+# Prevent CPU/RAM exhaustion: at most 2 videos processed concurrently.
+# Each video runs up to 5 FFmpeg clip-extraction jobs sequentially inside
+# its slot, so this caps active FFmpeg processes at 2 at any given time.
+_PROCESSING_SEMAPHORE = asyncio.Semaphore(2)
+
 
 async def process_video(video_id: int) -> None:
-    await asyncio.sleep(1)
+    async with _PROCESSING_SEMAPHORE:
+        await _do_process(video_id)
+
+
+async def _do_process(video_id: int) -> None:
+    await asyncio.sleep(0)  # yield before acquiring DB
 
     db: Session = SessionLocal()
     video: models.VideoMatch | None = None
@@ -33,12 +43,15 @@ async def process_video(video_id: int) -> None:
         db.commit()
 
         settings = get_settings()
-        duration = probe_duration_seconds(video.file_path)
+
+        # FFprobe is a blocking subprocess — run it in a thread so the
+        # asyncio event loop stays responsive to other HTTP requests.
+        duration = await asyncio.to_thread(probe_duration_seconds, video.file_path)
         if duration is not None:
             video.duration_seconds = duration
             db.commit()
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(0)  # yield between heavy operations
 
         detector = get_detector()
         raw_events = detector.detect(video.file_path, duration)
@@ -48,7 +61,10 @@ async def process_video(video_id: int) -> None:
                 f"clip_{video_id}_{int(event_data.timestamp_seconds)}_"
                 f"{event_data.event_type.value}.mp4"
             )
-            clip_path = generate_clip(
+            # FFmpeg encoding is blocking and CPU-intensive — must run in a
+            # thread, never directly on the event loop.
+            clip_path = await asyncio.to_thread(
+                generate_clip,
                 CLIPS_DIR,
                 video.file_path,
                 event_data.timestamp_seconds,

@@ -51,7 +51,7 @@ Credenciales: **admin** / **admin** (cambiar en producción). El equipo «Admini
 
 Manual:
 ```bash
-cd backend && venv\Scripts\python -m uvicorn main:app --reload --port 8000
+cd backend && venv\Scripts\python run.py
 cd frontend && npm run dev
 ```
 

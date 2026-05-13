@@ -70,10 +70,12 @@ def generate_clip(
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=600)
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
         if result.returncode == 0 and os.path.exists(clip_path):
             return clip_path
         logger.warning("ffmpeg falló: %s", result.stderr[-500:] if result.stderr else "")
+    except subprocess.TimeoutExpired:
+        logger.warning("generate_clip: ffmpeg timeout (120s) para %s", clip_filename)
     except Exception as e:
         logger.exception("generate_clip: %s", e)
 

@@ -1,11 +1,11 @@
 # Python
 backend/venv/
-backend/__pycache__/
-backend/*.pyc
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 backend/flak_ai.db
 backend/uploads/
 backend/clips/
-backend/routers/__pycache__/
 
 # Node
 node_modules/

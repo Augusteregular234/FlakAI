@@ -43,7 +43,7 @@ class Team(Base):
     subscription_tier = Column(String(32), default="free_trial", nullable=False)
     stripe_customer_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    users = relationship("User", back_populates="team")
+    users = relationship("User", back_populates="team", foreign_keys="[User.team_id]")
     videos = relationship("VideoMatch", back_populates="team")
 
 
@@ -56,7 +56,7 @@ class User(Base):
     hashed_password = Column(String)
     is_admin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    team = relationship("Team", back_populates="users")
+    team = relationship("Team", back_populates="users", foreign_keys="[User.team_id]")
     videos = relationship("VideoMatch", back_populates="uploader")
 
 

@@ -3,7 +3,7 @@ import uuid
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Form
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from database import get_db
 from auth import require_active_team
 from billing.subscription import PREMIUM_TIER, can_start_upload
@@ -26,6 +26,7 @@ def list_videos(
 ):
     videos = (
         db.query(models.VideoMatch)
+        .options(joinedload(models.VideoMatch.events))
         .filter(models.VideoMatch.team_id == current_user.team_id)
         .order_by(models.VideoMatch.created_at.desc())
         .all()
