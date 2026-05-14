@@ -64,6 +64,9 @@ class VideoOut(BaseModel):
     processed_at: Optional[datetime] = None
     event_count: Optional[int] = 0
     pending_count: Optional[int] = 0
+    processing_started_at: Optional[datetime] = None
+    processing_events_done: int = 0
+    processing_events_total: int = 0
     model_config = {"from_attributes": True}
 
 

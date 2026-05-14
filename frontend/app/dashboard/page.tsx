@@ -27,6 +27,46 @@ function formatBytes(bytes: number) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+function formatEta(seconds: number): string {
+  if (!isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 60) return `~${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `~${m}m ${s}s`;
+}
+
+function ProcessingProgress({ v }: { v: import("@/lib/api").Video }) {
+  const total = v.processing_events_total;
+  const done = v.processing_events_done;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  let eta = "";
+  if (done > 0 && total > 0 && v.processing_started_at) {
+    const elapsed = (Date.now() - new Date(v.processing_started_at).getTime()) / 1000;
+    const rate = done / elapsed;
+    const remaining = (total - done) / rate;
+    eta = formatEta(remaining);
+  }
+
+  return (
+    <div className="flex-1 min-w-0 mt-2">
+      <div className="flex justify-between text-xs text-zinc-500 mb-1">
+        <span>{total > 0 ? `${done} / ${total} clips` : "Detectando eventos..."}</span>
+        <span className="text-yellow-400 font-medium">
+          {total > 0 ? `${pct}%` : ""}
+          {eta && <span className="ml-2 text-zinc-500">{eta}</span>}
+        </span>
+      </div>
+      <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-yellow-400 rounded-full transition-all duration-500"
+          style={{ width: total > 0 ? `${pct}%` : "0%" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,40 +124,44 @@ export default function DashboardPage() {
           {videos.map((v) => (
             <div
               key={v.id}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex items-center justify-between hover:border-zinc-700 transition-colors"
+              className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors"
             >
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-medium truncate">{v.original_name}</p>
-                <p className="text-zinc-600 text-xs mt-1">
-                  {formatBytes(v.file_size)} · {new Date(v.created_at).toLocaleDateString("es-ES")}
-                </p>
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium truncate">{v.original_name}</p>
+                  <p className="text-zinc-600 text-xs mt-1">
+                    {formatBytes(v.file_size)} · {new Date(v.created_at).toLocaleDateString("es-ES")}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4 ml-4 shrink-0">
+                  {v.status === "completed" && (
+                    <div className="text-right text-xs text-zinc-500">
+                      <span className="text-white font-medium">{v.event_count}</span> eventos
+                      {v.pending_count > 0 && (
+                        <span className="ml-2 text-yellow-400">
+                          · <span className="font-medium">{v.pending_count}</span> pendientes
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <Badge className={`${STATUS_COLORS[v.status]} border text-xs`}>
+                    {STATUS_LABELS[v.status]}
+                    {v.status === "processing" && "..."}
+                  </Badge>
+
+                  {v.status === "completed" && (
+                    <Link href={`/dashboard/results/${v.id}`}>
+                      <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white">
+                        Ver
+                      </Button>
+                    </Link>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center gap-4 ml-4">
-                {v.status === "completed" && (
-                  <div className="text-right text-xs text-zinc-500">
-                    <span className="text-white font-medium">{v.event_count}</span> eventos
-                    {v.pending_count > 0 && (
-                      <span className="ml-2 text-yellow-400">
-                        · <span className="font-medium">{v.pending_count}</span> pendientes
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <Badge className={`${STATUS_COLORS[v.status]} border text-xs`}>
-                  {STATUS_LABELS[v.status]}
-                  {v.status === "processing" && "..."}
-                </Badge>
-
-                {v.status === "completed" && (
-                  <Link href={`/dashboard/results/${v.id}`}>
-                    <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white">
-                      Ver
-                    </Button>
-                  </Link>
-                )}
-              </div>
+              {v.status === "processing" && <ProcessingProgress v={v} />}
             </div>
           ))}
         </div>

@@ -217,6 +217,9 @@ export interface Video {
   processed_at: string | null;
   event_count: number;
   pending_count: number;
+  processing_started_at: string | null;
+  processing_events_done: number;
+  processing_events_total: number;
 }
 
 export interface MlAdminSummary {

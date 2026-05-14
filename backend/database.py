@@ -71,9 +71,13 @@ def _migrate_videos_and_clips(conn_engine) -> None:
         cols = {c["name"] for c in insp.get_columns("videos")}
         with conn_engine.begin() as conn:
             if "duration_seconds" not in cols:
-                conn.execute(
-                    text("ALTER TABLE videos ADD COLUMN duration_seconds REAL")
-                )
+                conn.execute(text("ALTER TABLE videos ADD COLUMN duration_seconds REAL"))
+            if "processing_started_at" not in cols:
+                conn.execute(text("ALTER TABLE videos ADD COLUMN processing_started_at DATETIME"))
+            if "processing_events_done" not in cols:
+                conn.execute(text("ALTER TABLE videos ADD COLUMN processing_events_done INTEGER DEFAULT 0"))
+            if "processing_events_total" not in cols:
+                conn.execute(text("ALTER TABLE videos ADD COLUMN processing_events_total INTEGER DEFAULT 0"))
     if "event_clips" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("event_clips")}
         with conn_engine.begin() as conn:

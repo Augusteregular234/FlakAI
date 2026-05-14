@@ -46,6 +46,9 @@ async def _do_process(video_id: int) -> None:
         )
 
         video.status = models.VideoStatus.processing
+        video.processing_started_at = datetime.utcnow()
+        video.processing_events_done = 0
+        video.processing_events_total = 0
         db.commit()
 
         settings = get_settings()
@@ -64,6 +67,9 @@ async def _do_process(video_id: int) -> None:
         logger.info("process_video video_id=%s detector=%s", video_id, detector.model_version)
         raw_events = detector.detect(video.file_path, duration)
         logger.info("process_video video_id=%s eventos_detectados=%d", video_id, len(raw_events))
+
+        video.processing_events_total = len(raw_events)
+        db.commit()
 
         clips_ok = 0
         clips_fail = 0
@@ -117,6 +123,7 @@ async def _do_process(video_id: int) -> None:
                 detector_metadata=meta,
             )
             db.add(clip)
+            video.processing_events_done = i + 1
             db.commit()  # commit each clip immediately so it appears in the UI
 
         video.status = models.VideoStatus.completed
