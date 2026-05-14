@@ -32,13 +32,18 @@ MAX_MATCHES  = 40                 # tope de seguridad por noche
 
 LOG_FILE = Path(__file__).parent / "overnight_log.txt"
 
+_handlers: list[logging.Handler] = [logging.FileHandler(LOG_FILE, encoding="utf-8")]
+try:
+    _sh = logging.StreamHandler(sys.stdout)
+    _sh.stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    _handlers.append(_sh)
+except Exception:
+    pass  # stdout no disponible (proceso oculto)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
+    handlers=_handlers,
 )
 log = logging.getLogger("overnight")
 
@@ -79,31 +84,36 @@ def login() -> str | None:
 # ── Download ──────────────────────────────────────────────────────────────────
 
 def download(url: str, dest_dir: Path) -> Path | None:
-    before = set(dest_dir.glob("*.mp4"))
+    output_tmpl = str(dest_dir / "%(title).80s.%(ext)s")
+    t0 = time.time()
+
     cmd = [
         PYTHON, "-m", "yt_dlp",
         "--no-playlist",
         "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--merge-output-format", "mp4",
         "--no-warnings",
-        "-o", str(dest_dir / "%(title).80s.%(ext)s"),
+        "-o", output_tmpl,
         url,
     ]
     log.info("Descargando: %s", url)
-    result = subprocess.run(cmd, timeout=3600)
+    result = subprocess.run(cmd, timeout=3600, capture_output=False)
     if result.returncode != 0:
-        log.warning("yt-dlp falló (rc=%d) para %s", result.returncode, url)
+        log.warning("yt-dlp fallo (rc=%d) para %s", result.returncode, url)
         return None
 
-    after = set(dest_dir.glob("*.mp4"))
-    new_files = after - before
-    if not new_files:
-        log.warning("No se encontró archivo .mp4 tras descargar %s", url)
+    # Buscar el .mp4 mas reciente en dest_dir (nuevo o ya existente/sobreescrito)
+    all_mp4 = list(dest_dir.glob("*.mp4"))
+    if not all_mp4:
+        log.warning("No se encontro .mp4 en %s para %s", dest_dir, url)
         return None
 
-    path = sorted(new_files, key=lambda f: f.stat().st_mtime, reverse=True)[0]
+    # Preferir archivo creado/modificado en esta sesion; fallback al mas reciente
+    recent = [f for f in all_mp4 if f.stat().st_mtime >= t0 - 10]
+    candidates = recent if recent else all_mp4
+    path = sorted(candidates, key=lambda f: f.stat().st_mtime, reverse=True)[0]
     size_mb = path.stat().st_size / 1_048_576
-    log.info("Descargado: %s (%.1f MB)", path.name, size_mb)
+    log.info("Listo: %s (%.1f MB)", path.name, size_mb)
     return path
 
 
@@ -182,27 +192,27 @@ def main() -> None:
 
         video_path = download(url, DEST_DIR)
         if not video_path:
-            log.warning("Saltando %s — descarga fallida", desc)
+            log.warning("Saltando %s - descarga fallida", desc)
             continue
 
         video_id = upload(token, video_path)
         if video_id:
             done += 1
-            log.info("✓ Partido %d completado. Analizando en background.", done)
+            log.info("DONE partido %d completado. Analizando en background.", done)
         else:
-            log.warning("✗ Upload fallido para %s", desc)
+            log.warning("FAIL upload fallido para %s", desc)
             continue
 
         if not KEEP_FILES:
             video_path.unlink(missing_ok=True)
 
         if done < len(MATCH_QUEUE):
-            log.info("Esperando %ds antes del siguiente…", SLEEP_BETWEEN)
+            log.info("Esperando %ds antes del siguiente...", SLEEP_BETWEEN)
             time.sleep(SLEEP_BETWEEN)
 
     log.info("=" * 60)
     log.info("Worker finalizado. %d partidos subidos.", done)
-    log.info("Clips disponibles en revisión: http://localhost:3000/dashboard/review")
+    log.info("Clips disponibles en revision: http://localhost:3000/dashboard/review")
     log.info("=" * 60)
 
 
