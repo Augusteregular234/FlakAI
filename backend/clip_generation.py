@@ -32,6 +32,7 @@ def generate_clip(
 ) -> str | None:
     os.makedirs(clips_dir, exist_ok=True)
     clip_path = os.path.join(clips_dir, clip_filename)
+    get_settings.cache_clear()  # evita valor obsoleto tras hot-reload
     s = get_settings()
     window = float(s.clip_window_seconds)
 
