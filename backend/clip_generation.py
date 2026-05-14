@@ -36,9 +36,8 @@ def generate_clip(
     s = get_settings()
     window = float(s.clip_window_seconds)
 
-    # Centrar el clip: mostrar (window/2) segundos ANTES y DESPUÉS del evento
-    half = window / 2.0
-    start = max(0.0, event_timestamp - half)
+    # Clip empieza en el evento y dura window segundos
+    start = max(0.0, event_timestamp)
 
     ffmpeg = resolve_ffmpeg_path()
     if not ffmpeg:
