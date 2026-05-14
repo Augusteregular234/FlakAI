@@ -153,7 +153,7 @@ def upload(token: str, video_path: Path) -> int | None:
 
     # complete
     r = requests.post(f"{API}/api/videos/upload/{upload_id}/complete",
-                      headers=headers, timeout=15)
+                      headers=headers, timeout=300)  # ensamblado de chunks grande puede tardar
     if not r.ok:
         log.error("Upload complete falló: %s", r.text)
         return None
