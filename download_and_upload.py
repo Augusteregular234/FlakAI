@@ -17,7 +17,6 @@ import math
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import requests
@@ -119,6 +118,7 @@ def main() -> None:
     parser.add_argument("--password", required=True, help="Contraseña")
     parser.add_argument("--api", default="http://localhost:8000", help="URL base de la API")
     parser.add_argument("--keep", action="store_true", help="No borrar vídeos descargados tras subir")
+    parser.add_argument("--dest", default=r"C:\Users\saamu\Videos\analisisFLK", help="Carpeta destino de descarga")
     parser.add_argument("--file", help="Fichero .txt con URLs (una por línea)")
     parser.add_argument("urls", nargs="*", help="URLs de vídeos a descargar")
     args = parser.parse_args()
@@ -145,7 +145,8 @@ def main() -> None:
 
     token = login(args.user, args.password)
 
-    download_dir = Path(tempfile.mkdtemp(prefix="flakai_dl_"))
+    download_dir = Path(args.dest)
+    download_dir.mkdir(parents=True, exist_ok=True)
     print(f"[info] Descargando en: {download_dir}")
 
     ok, fail = 0, 0
@@ -166,11 +167,6 @@ def main() -> None:
             video_path.unlink()
 
     print(f"\n[done] ✓ {ok} subidos, ✗ {fail} fallados")
-    if not args.keep:
-        try:
-            download_dir.rmdir()
-        except OSError:
-            pass
 
 
 if __name__ == "__main__":

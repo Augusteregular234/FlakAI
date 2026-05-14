@@ -184,6 +184,7 @@ export default function ReviewPage() {
               controls
               autoPlay
               playsInline
+              muted
               className="w-full aspect-video bg-black"
               onLoadedData={() => { if (videoRef.current) videoRef.current.playbackRate = 2; }}
               onError={(e) => console.error("Video error", e.currentTarget.error?.code, e.currentTarget.src)}
