@@ -24,6 +24,16 @@ _PROCESSING_SEMAPHORE = asyncio.Semaphore(2)
 
 
 async def process_video(video_id: int) -> None:
+    # Marcar como en cola antes de esperar el semáforo
+    db_q: Session = SessionLocal()
+    try:
+        v = db_q.query(models.VideoMatch).filter(models.VideoMatch.id == video_id).first()
+        if v:
+            v.status = models.VideoStatus.queued
+            db_q.commit()
+    finally:
+        db_q.close()
+
     async with _PROCESSING_SEMAPHORE:
         await _do_process(video_id)
 

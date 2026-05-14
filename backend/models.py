@@ -7,6 +7,7 @@ from database import Base
 
 class VideoStatus(str, enum.Enum):
     uploading = "uploading"
+    queued = "queued"
     processing = "processing"
     completed = "completed"
     error = "error"

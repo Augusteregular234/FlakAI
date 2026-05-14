@@ -124,7 +124,7 @@ async def complete_upload(
     import shutil
     shutil.rmtree(chunk_dir, ignore_errors=True)
 
-    video.status = models.VideoStatus.processing
+    video.status = models.VideoStatus.queued
 
     team = (
         db.query(models.Team).filter(models.Team.id == video.team_id).first()
@@ -136,7 +136,7 @@ async def complete_upload(
 
     background_tasks.add_task(process_video, video.id)
 
-    return {"video_id": video.id, "status": "processing"}
+    return {"video_id": video.id, "status": "queued"}
 
 
 @router.get("/{video_id}", response_model=schemas.VideoOut)

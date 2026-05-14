@@ -211,7 +211,7 @@ export interface Video {
   original_name: string;
   file_size: number;
   duration_seconds?: number | null;
-  status: "uploading" | "processing" | "completed" | "error";
+  status: "uploading" | "queued" | "processing" | "completed" | "error";
   upload_id: string;
   created_at: string;
   processed_at: string | null;

@@ -6,17 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const STATUS_LABELS: Record<string, string> = {
-  uploading: "Subiendo",
+  uploading:  "Subiendo",
+  queued:     "En Cola",
   processing: "Procesando",
-  completed: "Completado",
-  error: "Error",
+  completed:  "Completado",
+  error:      "Error",
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  uploading: "bg-blue-500/10 text-blue-400 border-blue-800",
+  uploading:  "bg-blue-500/10 text-blue-400 border-blue-800",
+  queued:     "bg-purple-500/10 text-purple-400 border-purple-800",
   processing: "bg-yellow-500/10 text-yellow-400 border-yellow-800",
-  completed: "bg-emerald-500/10 text-emerald-400 border-emerald-800",
-  error: "bg-red-500/10 text-red-400 border-red-800",
+  completed:  "bg-emerald-500/10 text-emerald-400 border-emerald-800",
+  error:      "bg-red-500/10 text-red-400 border-red-800",
 };
 
 function formatBytes(bytes: number) {
@@ -161,6 +163,18 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {v.status === "queued" && (() => {
+                const pos = videos
+                  .filter(x => x.status === "queued")
+                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                  .findIndex(x => x.id === v.id) + 1;
+                return (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-purple-400">
+                    <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                    Posición {pos} en cola — esperando slot de procesamiento
+                  </div>
+                );
+              })()}
               {v.status === "processing" && <ProcessingProgress v={v} />}
             </div>
           ))}
