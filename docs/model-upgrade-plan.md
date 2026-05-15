@@ -87,23 +87,13 @@ to learn meaningful temporal patterns — useless below ~1000 samples.
 
 ---
 
-## Known pending fix
+## Classes (7 total)
 
-`CLASSES` in `training/model.py` currently has 5 classes:
-```python
-CLASSES = ["negative", "goal", "corner", "throw_in", "foul"]
-```
-
-**Missing: `goal_kick` and `shot_on_target`** — clips with these event types
-get mapped to `label_idx=0` ("negative") during training. This is a bug that
-corrupts the dataset.
-
-**Fix when ready to retrain from scratch** (changing NUM_CLASSES breaks existing checkpoints):
 ```python
 CLASSES = ["negative", "goal", "corner", "throw_in", "foul", "goal_kick", "shot_on_target"]
 ```
 
-Do this at the same time as a backbone upgrade so you start a new model version cleanly.
+All event types are now correctly mapped. Fixed before first training run.
 
 ---
 
