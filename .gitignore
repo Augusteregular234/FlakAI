@@ -35,6 +35,10 @@ checkpoints/*.pt
 # Torch model cache
 *.pth
 
+# Runtime logs
+overnight_log.txt
+backend/regen_log.txt
+
 # OS
 .DS_Store
 Thumbs.db
