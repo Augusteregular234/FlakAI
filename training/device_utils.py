@@ -57,14 +57,14 @@ def get_device(device_arg: str = "auto"):
     try:
         import torch_directml
         dev = torch_directml.device()
-        logger.info("Device: DirectML AMD/Intel GPU (auto)")
+        logger.info("Device: DirectML — AMD/Intel GPU via DirectX 12 (auto)")
         return dev
     except ImportError:
         pass
 
     _set_cpu_threads()
     n = os.cpu_count() or 1
-    logger.info("Device: CPU (%d threads) — install DirectML for GPU acceleration", n)
+    logger.info("Device: CPU (%d threads)", n)
     return torch.device("cpu")
 
 

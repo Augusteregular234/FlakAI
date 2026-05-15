@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 REPO = Path(__file__).parent.parent.parent
 MODELS_DIR = REPO / "models"
-VENV_PYTHON = REPO / "backend" / "venv" / "Scripts" / "python.exe"
+# Use the DirectML training venv (Python 3.12 + torch-directml) if available,
+# otherwise fall back to the backend venv (CPU only).
+_DML_PYTHON = REPO / "training" / "training_venv" / "Scripts" / "python.exe"
+_CPU_PYTHON  = REPO / "backend"  / "venv"          / "Scripts" / "python.exe"
+VENV_PYTHON  = _DML_PYTHON if _DML_PYTHON.exists() else _CPU_PYTHON
 STATUS_FILE = MODELS_DIR / "training_status.json"
 METRICS_FILE = MODELS_DIR / "training_metrics.json"
 HISTORY_FILE = MODELS_DIR / "training_history.json"

@@ -35,6 +35,9 @@ checkpoints/*.pt
 # Torch model cache
 *.pth
 
+# DirectML training venv (Python 3.12, local only)
+training/training_venv/
+
 # Runtime logs
 overnight_log.txt
 backend/regen_log.txt
