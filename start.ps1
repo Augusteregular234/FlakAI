@@ -28,7 +28,7 @@ for ($i = 0; $i -lt 20; $i++) {
 if ($ready) {
     Write-Host "Backend ready." -ForegroundColor Green
 } else {
-    Write-Host "Backend did not respond in 20s — check the backend window for errors." -ForegroundColor Red
+    Write-Host "Backend did not respond in 20s - check the backend window for errors." -ForegroundColor Red
 }
 
 # Frontend
