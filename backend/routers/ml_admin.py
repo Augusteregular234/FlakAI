@@ -96,16 +96,24 @@ def training_history(_: models.User = Depends(get_current_admin)):
 async def start_training(
     epochs: int = 20,
     lr: float = 1e-3,
+    batch_size: int = 8,
+    device: str = "auto",
     _: models.User = Depends(get_current_admin),
 ):
     """
     Start full training from all reviewed clips.
+    device: auto | cuda (NVIDIA) | dml (AMD via DirectML) | cpu
     Runs as a background job — poll /training/status for progress.
     """
     from ml.trainer import get_coordinator
     result = await get_coordinator().start(
         mode="full",
-        args=["--epochs", str(epochs), "--lr", str(lr)],
+        args=[
+            "--epochs", str(epochs),
+            "--lr", str(lr),
+            "--batch-size", str(batch_size),
+            "--device", device,
+        ],
     )
     if "error" in result:
         raise HTTPException(status_code=409, detail=result["error"])
@@ -116,15 +124,24 @@ async def start_training(
 async def start_incremental(
     epochs: int = 10,
     min_new: int = 5,
+    batch_size: int = 8,
+    device: str = "auto",
     _: models.User = Depends(get_current_admin),
 ):
     """
     Incremental fine-tune on newly reviewed clips since last training.
+    device: auto | cuda (NVIDIA) | dml (AMD via DirectML) | cpu
     """
     from ml.trainer import get_coordinator
     result = await get_coordinator().start(
         mode="incremental",
-        args=["--epochs", str(epochs), "--min-new", str(min_new), "--force"],
+        args=[
+            "--epochs", str(epochs),
+            "--min-new", str(min_new),
+            "--force",
+            "--batch-size", str(batch_size),
+            "--device", device,
+        ],
     )
     if "error" in result:
         raise HTTPException(status_code=409, detail=result["error"])

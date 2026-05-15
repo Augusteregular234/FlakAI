@@ -93,9 +93,9 @@ def run(args: argparse.Namespace) -> dict:
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=0)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    # ── Model ─────────────────────────────────────────────────────────────
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
-    logger.info("Device: %s", device)
+    # ── Device ────────────────────────────────────────────────────────────
+    from training.device_utils import get_device
+    device = get_device("cpu" if args.cpu else args.device)
 
     freeze = len(samples) < args.unfreeze_after
     model = EventClassifier(
@@ -226,11 +226,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--epochs", type=int, default=20, help="Training epochs")
     p.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     p.add_argument("--wd", type=float, default=1e-4, help="Weight decay")
-    p.add_argument("--batch-size", type=int, default=4, dest="batch_size")
+    p.add_argument("--batch-size", type=int, default=8, dest="batch_size")
     p.add_argument("--val-ratio", type=float, default=0.2, dest="val_ratio")
     p.add_argument("--unfreeze-after", type=int, default=200, dest="unfreeze_after",
                    help="Unfreeze backbone when total samples >= this")
     p.add_argument("--cpu", action="store_true", help="Force CPU even if GPU available")
+    p.add_argument("--device", default="auto",
+                   choices=["auto", "cuda", "dml", "cpu"],
+                   help="Compute device: auto | cuda (NVIDIA) | dml (AMD DirectML) | cpu")
     p.add_argument("--from-jsonl", default=None, dest="from_jsonl",
                    help="Load from exported JSONL instead of live DB")
     p.add_argument("--backbone", default="mobilenet_v3_small",

@@ -103,7 +103,8 @@ def run(args: argparse.Namespace) -> dict:
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=0)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
+    from training.device_utils import get_device
+    device = get_device("cpu" if args.cpu else args.device)
     model = model.to(device)
 
     optimizer = torch.optim.AdamW(
@@ -174,13 +175,14 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--lr", type=float, default=5e-4)
-    p.add_argument("--batch-size", type=int, default=4, dest="batch_size")
+    p.add_argument("--batch-size", type=int, default=8, dest="batch_size")
     p.add_argument("--val-ratio", type=float, default=0.2, dest="val_ratio")
     p.add_argument("--min-new", type=int, default=10, dest="min_new",
                    help="Minimum new samples needed to trigger training")
     p.add_argument("--force", action="store_true", help="Train even if min_new not reached")
     p.add_argument("--base-model", default=None, dest="base_model")
     p.add_argument("--cpu", action="store_true")
+    p.add_argument("--device", default="auto", choices=["auto", "cuda", "dml", "cpu"])
     return p.parse_args()
 
 
