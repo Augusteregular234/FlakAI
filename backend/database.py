@@ -82,15 +82,17 @@ def _migrate_videos_and_clips(conn_engine) -> None:
         cols = {c["name"] for c in insp.get_columns("event_clips")}
         with conn_engine.begin() as conn:
             if "model_version" not in cols:
-                conn.execute(
-                    text(
-                        "ALTER TABLE event_clips ADD COLUMN model_version VARCHAR(64)"
-                    )
-                )
+                conn.execute(text("ALTER TABLE event_clips ADD COLUMN model_version VARCHAR(64)"))
             if "detector_metadata" not in cols:
-                conn.execute(
-                    text("ALTER TABLE event_clips ADD COLUMN detector_metadata TEXT")
-                )
+                conn.execute(text("ALTER TABLE event_clips ADD COLUMN detector_metadata TEXT"))
+            if "batch_id" not in cols:
+                conn.execute(text("ALTER TABLE event_clips ADD COLUMN batch_id INTEGER"))
+            if "label_source" not in cols:
+                conn.execute(text("ALTER TABLE event_clips ADD COLUMN label_source VARCHAR(32) DEFAULT 'pending'"))
+                # Backfill: clips already reviewed by humans are "manual"
+                conn.execute(text(
+                    "UPDATE event_clips SET label_source='manual' WHERE review_status != 'pending'"
+                ))
 
 
 def run_sqlite_migrations(conn_engine) -> None:

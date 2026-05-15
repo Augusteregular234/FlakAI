@@ -80,9 +80,24 @@ class EventClipOut(BaseModel):
     review_status: ReviewStatus
     model_version: Optional[str] = None
     created_at: datetime
+    batch_id: Optional[int] = None
+    label_source: str = "pending"
     model_config = {"from_attributes": True}
 
 
 class ReviewUpdate(BaseModel):
     status: ReviewStatus
-    event_type: Optional[EventType] = None  # si se reclasifica a otro tipo
+    event_type: Optional[EventType] = None
+
+
+class LabelingBatchOut(BaseModel):
+    id: int
+    name: str
+    status: str
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    total: int = 0
+    manual: int = 0
+    pseudo: int = 0
+    pending: int = 0
+    model_config = {"from_attributes": True}

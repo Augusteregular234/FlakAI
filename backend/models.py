@@ -48,6 +48,7 @@ class Team(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     users = relationship("User", back_populates="team", foreign_keys="[User.team_id]")
     videos = relationship("VideoMatch", back_populates="team")
+    batches = relationship("LabelingBatch", back_populates="team")
 
 
 class User(Base):
@@ -85,6 +86,19 @@ class VideoMatch(Base):
     events = relationship("EventClip", back_populates="video")
 
 
+class LabelingBatch(Base):
+    """A named group of clips for human labeling."""
+    __tablename__ = "labeling_batches"
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    name = Column(String, nullable=False)
+    status = Column(String(32), default="pending")  # pending | completed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    team = relationship("Team", back_populates="batches")
+    clips = relationship("EventClip", back_populates="batch")
+
+
 class EventClip(Base):
     __tablename__ = "event_clips"
     id = Column(Integer, primary_key=True, index=True)
@@ -99,4 +113,9 @@ class EventClip(Base):
     model_version = Column(String(64), nullable=True)
     detector_metadata = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Batch assignment
+    batch_id = Column(Integer, ForeignKey("labeling_batches.id"), nullable=True)
+    # Who labeled: "pending" | "manual" | "pseudo"
+    label_source = Column(String(32), default="pending", nullable=False)
     video = relationship("VideoMatch", back_populates="events")
+    batch = relationship("LabelingBatch", back_populates="clips")

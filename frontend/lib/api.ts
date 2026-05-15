@@ -35,7 +35,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   } catch {
     throw new Error(
-      `No hay conexión con la API (${BASE_URL}). Arranca el backend (puerto 8000) o revisa NEXT_PUBLIC_API_URL en frontend/.env.local.`
+      `No hay conexion con la API (${BASE_URL}). Arranca el backend (puerto 8000) o revisa NEXT_PUBLIC_API_URL en frontend/.env.local.`
     );
   }
 
@@ -47,7 +47,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-/** Descarga binaria (export CSV/JSONL) con el mismo auth que el resto de la API. */
 export async function downloadExport(path: string, filename: string): Promise<void> {
   const token = getToken();
   const headers: Record<string, string> = {};
@@ -57,9 +56,7 @@ export async function downloadExport(path: string, filename: string): Promise<vo
   try {
     res = await fetch(`${BASE_URL}${path}`, { headers });
   } catch {
-    throw new Error(
-      `No hay conexión con la API (${BASE_URL}). Arranca el backend en el puerto 8000.`
-    );
+    throw new Error(`No hay conexion con la API (${BASE_URL}).`);
   }
 
   if (!res.ok) {
@@ -80,6 +77,7 @@ export async function downloadExport(path: string, filename: string): Promise<vo
 }
 
 export type TeamStatus = "pending_approval" | "active" | "rejected";
+export type LabelSource = "pending" | "manual" | "pseudo";
 
 export const api = {
   auth: {
@@ -103,6 +101,19 @@ export const api = {
     rejectTeam: (id: number) =>
       request<Team>(`/api/admin/teams/${id}/reject`, { method: "POST" }),
     mlSummary: () => request<MlAdminSummary>(`/api/admin/ml/summary`),
+    labelStats: () => request<LabelStats>("/api/admin/ml/label-stats"),
+    datasetStats: () => request<DatasetStats>("/api/admin/ml/dataset/stats"),
+    pseudoLabel: (threshold = 75) =>
+      request<PseudoLabelResult>(
+        `/api/admin/ml/pseudo-label?confidence_threshold=${threshold}`,
+        { method: "POST" }
+      ),
+    startTraining: (epochs = 20, lr = 0.001) =>
+      request<Record<string, unknown>>(
+        `/api/admin/ml/training/start?epochs=${epochs}&lr=${lr}`,
+        { method: "POST" }
+      ),
+    trainingStatus: () => request<Record<string, unknown>>("/api/admin/ml/training/status"),
   },
   videos: {
     list: () => request<Video[]>("/api/videos/"),
@@ -133,7 +144,14 @@ export const api = {
       ),
   },
   clips: {
-    pending: () => request<EventClip[]>("/api/clips/pending"),
+    pending: (batchId?: number) =>
+      request<EventClip[]>(
+        `/api/clips/pending${batchId !== undefined ? `?batch_id=${batchId}` : ""}`
+      ),
+    pseudo: (batchId?: number) =>
+      request<EventClip[]>(
+        `/api/clips/pseudo${batchId !== undefined ? `?batch_id=${batchId}` : ""}`
+      ),
     forVideo: (videoId: number) => request<EventClip[]>(`/api/clips/video/${videoId}`),
     review: (clipId: number, status: "approved" | "rejected", eventType?: string) =>
       request<EventClip>(`/api/clips/${clipId}/review`, {
@@ -146,6 +164,20 @@ export const api = {
       return `${BASE_URL}/api/clips/${clipId}/stream${query}`;
     },
   },
+  batches: {
+    list: () => request<LabelingBatch[]>("/api/batches/"),
+    initialize: (n = 10) =>
+      request<{ created: number; clips_distributed: number }>(
+        `/api/batches/initialize?n=${n}`,
+        { method: "POST" }
+      ),
+    complete: (id: number) =>
+      request<LabelingBatch>(`/api/batches/${id}/complete`, { method: "PATCH" }),
+    clips: (id: number, source?: "pending" | "pseudo" | "manual") =>
+      request<EventClip[]>(
+        `/api/batches/${id}/clips${source ? `?source=${source}` : ""}`
+      ),
+  },
   billing: {
     plans: () => request<BillingPlans>("/api/billing/plans"),
     createCheckout: (tier: "pro" | "club") =>
@@ -156,24 +188,19 @@ export const api = {
     createPortal: () =>
       request<{ url: string }>("/api/billing/create-portal-session", { method: "POST" }),
   },
-  /** Etiquetas humanas = clips con decisión Aceptar/Rechazar (no pendientes). */
   exportLabels: {
     teamJsonl: () =>
       downloadExport("/api/export/reviewed?format=jsonl", "flakai_etiquetas_equipo.jsonl"),
     teamCsv: () =>
       downloadExport("/api/export/reviewed?format=csv", "flakai_etiquetas_equipo.csv"),
     adminJsonl: () =>
-      downloadExport(
-        "/api/admin/export/reviewed?format=jsonl",
-        "flakai_etiquetas_todos_equipos.jsonl"
-      ),
+      downloadExport("/api/admin/export/reviewed?format=jsonl", "flakai_etiquetas_todos.jsonl"),
     adminCsv: () =>
-      downloadExport(
-        "/api/admin/export/reviewed?format=csv",
-        "flakai_etiquetas_todos_equipos.csv"
-      ),
+      downloadExport("/api/admin/export/reviewed?format=csv", "flakai_etiquetas_todos.csv"),
   },
 };
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface Team {
   id: number;
@@ -222,6 +249,46 @@ export interface Video {
   processing_events_total: number;
 }
 
+export interface EventClip {
+  id: number;
+  video_id: number;
+  event_type: "goal" | "corner" | "throw_in" | "foul" | "goal_kick" | "shot_on_target";
+  timestamp_seconds: number;
+  confidence: number;
+  clip_filename: string | null;
+  review_status: "pending" | "approved" | "rejected";
+  model_version?: string | null;
+  created_at: string;
+  batch_id: number | null;
+  label_source: LabelSource;
+}
+
+export interface LabelingBatch {
+  id: number;
+  name: string;
+  status: "pending" | "completed";
+  created_at: string;
+  completed_at: string | null;
+  total: number;
+  manual: number;
+  pseudo: number;
+  pending: number;
+}
+
+export interface LabelStats {
+  total: number;
+  manual: number;
+  pseudo: number;
+  pending: number;
+  labeled_pct: number;
+}
+
+export interface PseudoLabelResult {
+  pseudo_labeled: number;
+  still_pending: number;
+  threshold: number;
+}
+
 export interface MlAdminSummary {
   detector_backend: string;
   model_version: string;
@@ -233,6 +300,17 @@ export interface MlAdminSummary {
   manifest_exists: boolean;
   clip_window_seconds: number;
   auto_approve_confidence: number;
+}
+
+export interface DatasetStats {
+  approved_by_type: Record<string, number>;
+  total_approved: number;
+  total_rejected: number;
+  total_pending: number;
+  total_labeled: number;
+  ready_classes: string[];
+  can_train: boolean;
+  recommendation: string;
 }
 
 export interface BillingPlan {
@@ -248,16 +326,4 @@ export interface BillingPlan {
 export interface BillingPlans {
   current_tier: string;
   plans: BillingPlan[];
-}
-
-export interface EventClip {
-  id: number;
-  video_id: number;
-  event_type: "goal" | "corner" | "throw_in" | "foul";
-  timestamp_seconds: number;
-  confidence: number;
-  clip_filename: string | null;
-  review_status: "pending" | "approved" | "rejected";
-  model_version?: string | null;
-  created_at: string;
 }

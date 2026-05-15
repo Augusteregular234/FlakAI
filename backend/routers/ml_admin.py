@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 import models
 from auth import get_current_admin
@@ -162,6 +162,72 @@ def active_learning_queue(
         }
         for c in clips
     ]
+
+
+# ── Pseudo-labeling ───────────────────────────────────────────────────────
+
+@router.post("/pseudo-label")
+def pseudo_label(
+    confidence_threshold: float = Query(default=75.0, ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_admin),
+):
+    """
+    Auto-label pending clips using the detector's confidence score.
+    Clips >= threshold get pseudo-approved; below threshold stay pending.
+    Manual labels (label_source='manual') are NEVER touched.
+    """
+    pending = (
+        db.query(models.EventClip)
+        .filter(
+            models.EventClip.label_source == "pending",
+            models.EventClip.review_status == models.ReviewStatus.pending,
+        )
+        .all()
+    )
+
+    pseudo_count = 0
+    still_pending = 0
+    for clip in pending:
+        if clip.confidence >= confidence_threshold:
+            clip.review_status = models.ReviewStatus.approved
+            clip.label_source = "pseudo"
+            pseudo_count += 1
+        else:
+            still_pending += 1
+
+    db.commit()
+    return {
+        "pseudo_labeled": pseudo_count,
+        "still_pending": still_pending,
+        "threshold": confidence_threshold,
+    }
+
+
+@router.get("/label-stats")
+def label_stats(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_admin),
+):
+    """Breakdown of clips by who labeled them."""
+    from sqlalchemy import func as sqlfunc
+    rows = (
+        db.query(models.EventClip.label_source, sqlfunc.count(models.EventClip.id))
+        .group_by(models.EventClip.label_source)
+        .all()
+    )
+    counts = {src: cnt for src, cnt in rows}
+    total = sum(counts.values())
+    manual = counts.get("manual", 0)
+    pseudo = counts.get("pseudo", 0)
+    pending = counts.get("pending", 0)
+    return {
+        "total": total,
+        "manual": manual,
+        "pseudo": pseudo,
+        "pending": pending,
+        "labeled_pct": round((manual + pseudo) / total * 100, 1) if total > 0 else 0,
+    }
 
 
 # ── Dataset stats for training readiness ─────────────────────────────────

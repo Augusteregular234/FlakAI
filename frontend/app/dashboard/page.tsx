@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { api, type Video } from "@/lib/api";
+import { api, type Video, type LabelingBatch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -69,8 +69,44 @@ function ProcessingProgress({ v }: { v: import("@/lib/api").Video }) {
   );
 }
 
+function BatchProgress({ batches }: { batches: LabelingBatch[] }) {
+  if (batches.length === 0) return null;
+  const total = batches.reduce((s, b) => s + b.total, 0);
+  const labeled = batches.reduce((s, b) => s + b.manual + b.pseudo, 0);
+  const completed = batches.filter((b) => b.status === "completed").length;
+  const pct = total > 0 ? Math.round((labeled / total) * 100) : 0;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-zinc-300">Progreso de etiquetado</h3>
+        <Link href="/dashboard/review" className="text-xs text-emerald-400 hover:underline">
+          Ir a revision
+        </Link>
+      </div>
+      <div className="flex gap-4 text-xs text-zinc-500 mb-2">
+        <span><span className="text-white font-medium">{completed}</span>/{batches.length} lotes completados</span>
+        <span><span className="text-white font-medium">{labeled}</span>/{total} clips etiquetados</span>
+        <span className="text-emerald-400 font-medium">{pct}%</span>
+      </div>
+      <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="h-full flex">
+          <div className="bg-emerald-500" style={{ width: `${batches.reduce((s,b)=>s+b.manual,0)/Math.max(total,1)*100}%` }} />
+          <div className="bg-blue-500"    style={{ width: `${batches.reduce((s,b)=>s+b.pseudo,0)/Math.max(total,1)*100}%` }} />
+        </div>
+      </div>
+      <div className="flex gap-4 mt-2 text-xs">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Manual</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Pseudo-IA</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-700 inline-block" />Pendiente</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [videos, setVideos] = useState<Video[]>([]);
+  const [batches, setBatches] = useState<LabelingBatch[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -86,12 +122,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     load();
+    api.batches.list().then(setBatches).catch(() => null);
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
   }, [load]);
 
   return (
     <div className="p-8">
+      <BatchProgress batches={batches} />
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-2xl font-bold text-white">Mis Vídeos</h2>

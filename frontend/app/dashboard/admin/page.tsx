@@ -1,21 +1,32 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type MlAdminSummary, type Team } from "@/lib/api";
+import { api, type MlAdminSummary, type Team, type LabelStats, type DatasetStats } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function AdminTeamsPage() {
+export default function AdminPage() {
   const router = useRouter();
   const { user } = useAuthStore();
+
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
-  const [ml, setMl] = useState<MlAdminSummary | null>(null);
 
-  const load = useCallback(async () => {
+  const [ml, setMl] = useState<MlAdminSummary | null>(null);
+  const [labelStats, setLabelStats] = useState<LabelStats | null>(null);
+  const [datasetStats, setDatasetStats] = useState<DatasetStats | null>(null);
+
+  const [pseudoThreshold, setPseudoThreshold] = useState(75);
+  const [pseudoBusy, setPseudoBusy] = useState(false);
+  const [pseudoResult, setPseudoResult] = useState<string | null>(null);
+
+  const [trainBusy, setTrainBusy] = useState(false);
+  const [trainResult, setTrainResult] = useState<string | null>(null);
+
+  const loadTeams = useCallback(async () => {
     setError("");
     try {
       const list = await api.admin.pendingTeams();
@@ -28,125 +39,239 @@ export default function AdminTeamsPage() {
   }, []);
 
   useEffect(() => {
-    if (!user?.is_admin) {
-      router.replace("/dashboard");
-      return;
-    }
-    load();
-    api.admin
-      .mlSummary()
-      .then(setMl)
-      .catch(() => setMl(null));
-  }, [user?.is_admin, router, load]);
+    if (!user?.is_admin) { router.replace("/dashboard"); return; }
+    loadTeams();
+    Promise.all([
+      api.admin.mlSummary().catch(() => null),
+      api.admin.labelStats().catch(() => null),
+      api.admin.datasetStats().catch(() => null),
+    ]).then(([mlData, ls, ds]) => {
+      if (mlData) setMl(mlData);
+      if (ls) setLabelStats(ls);
+      if (ds) setDatasetStats(ds);
+    });
+  }, [user?.is_admin, router, loadTeams]);
+
+  if (!user?.is_admin) return null;
 
   const approve = async (id: number) => {
     setBusyId(id);
-    try {
-      await api.admin.approveTeam(id);
-      await load();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
-    } finally {
-      setBusyId(null);
-    }
+    try { await api.admin.approveTeam(id); await loadTeams(); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : "Error"); }
+    finally { setBusyId(null); }
   };
 
   const reject = async (id: number) => {
     setBusyId(id);
+    try { await api.admin.rejectTeam(id); await loadTeams(); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : "Error"); }
+    finally { setBusyId(null); }
+  };
+
+  const handlePseudoLabel = async () => {
+    setPseudoBusy(true);
+    setPseudoResult(null);
     try {
-      await api.admin.rejectTeam(id);
-      await load();
+      const res = await api.admin.pseudoLabel(pseudoThreshold);
+      setPseudoResult(
+        `${res.pseudo_labeled} clips pseudo-etiquetados. ${res.still_pending} clips con confianza baja quedan pendientes.`
+      );
+      // Refresh stats
+      api.admin.labelStats().then(setLabelStats).catch(() => null);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
+      setPseudoResult(`Error: ${e instanceof Error ? e.message : "fallo"}`);
     } finally {
-      setBusyId(null);
+      setPseudoBusy(false);
     }
   };
 
-  if (!user?.is_admin) return null;
+  const handleStartTraining = async () => {
+    setTrainBusy(true);
+    setTrainResult(null);
+    try {
+      await api.admin.startTraining(20, 0.001);
+      setTrainResult("Entrenamiento iniciado. Revisa el estado en logs del backend.");
+    } catch (e: unknown) {
+      setTrainResult(`Error: ${e instanceof Error ? e.message : "fallo"}`);
+    } finally {
+      setTrainBusy(false);
+    }
+  };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-2">Administración · Equipos</h1>
-      <p className="text-zinc-500 text-sm mb-8">
-        Aprueba o rechaza solicitudes de nuevos equipos (modelo SaaS cerrado).
-      </p>
+    <div className="p-8 max-w-3xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Administracion</h1>
+        <p className="text-zinc-500 text-sm mt-1">Equipos, modelo y pseudo-etiquetado.</p>
+      </div>
 
-      {ml && (
-        <Card className="bg-zinc-900 border-zinc-800 border-amber-500/20 mb-8">
+      {/* ── Label stats ──────────────────────────────────────────────── */}
+      {labelStats && (
+        <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
-            <CardTitle className="text-white text-lg">Dataset · ML (solo lectura)</CardTitle>
+            <CardTitle className="text-white text-base">Estado del etiquetado</CardTitle>
           </CardHeader>
-          <CardContent className="text-zinc-400 text-sm space-y-2 font-mono">
-            <p>
-              <span className="text-zinc-600">Detector:</span> {ml.detector_backend}{" "}
-              <span className="text-zinc-600">· modelo:</span> {ml.model_version}
-            </p>
-            <p>
-              <span className="text-zinc-600">Carpeta dataset:</span>{" "}
-              {ml.dataset_dir_exists ? "✓" : "✗"} {ml.dataset_videos_dir}
-            </p>
-            <p>
-              <span className="text-zinc-600">Vídeos detectados:</span> {ml.video_file_count} ·{" "}
-              <span className="text-zinc-600">tamaño total:</span>{" "}
-              {(ml.total_bytes / (1024 * 1024)).toFixed(1)} MB
-            </p>
-            <p>
-              <span className="text-zinc-600">Manifest:</span>{" "}
-              {ml.manifest_exists ? "✓" : "✗"} {ml.manifest_path}
-            </p>
-            <p className="text-zinc-600 text-xs pt-2">
-              Genera el manifest con:{" "}
-              <code className="text-emerald-400/90">python scripts/build_dataset_manifest.py</code>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-emerald-400">{labelStats.manual}</p>
+                <p className="text-zinc-500 text-xs mt-1">Manual</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-400">{labelStats.pseudo}</p>
+                <p className="text-zinc-500 text-xs mt-1">Pseudo-IA</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-yellow-400">{labelStats.pending}</p>
+                <p className="text-zinc-500 text-xs mt-1">Pendiente</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full flex">
+                  <div
+                    className="bg-emerald-500"
+                    style={{ width: `${labelStats.total > 0 ? (labelStats.manual / labelStats.total) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="bg-blue-500"
+                    style={{ width: `${labelStats.total > 0 ? (labelStats.pseudo / labelStats.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-zinc-400 text-sm font-mono">{labelStats.labeled_pct}%</span>
+            </div>
+            <p className="text-zinc-600 text-xs mt-2">
+              {labelStats.manual + labelStats.pseudo} de {labelStats.total} clips etiquetados
             </p>
           </CardContent>
         </Card>
       )}
 
+      {/* ── Pseudo-labeling ───────────────────────────────────────────── */}
       <Card className="bg-zinc-900 border-zinc-800">
         <CardHeader>
-          <CardTitle className="text-white text-lg">Pendientes de aprobación</CardTitle>
+          <CardTitle className="text-white text-base">Pseudo-etiquetado automatico</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-zinc-500 text-sm">
+            Etiqueta automaticamente los clips pendientes usando la confianza del detector.
+            Los clips con confianza &gt;= umbral se marcan como aprobados (pseudo).
+            Las etiquetas manuales nunca se sobreescriben.
+          </p>
+          <div className="flex items-center gap-4">
+            <label className="text-zinc-400 text-sm">Umbral de confianza:</label>
+            <input
+              type="range"
+              min={50}
+              max={95}
+              step={5}
+              value={pseudoThreshold}
+              onChange={(e) => setPseudoThreshold(Number(e.target.value))}
+              className="flex-1 accent-blue-500"
+            />
+            <span className="text-blue-400 font-mono text-sm w-10">{pseudoThreshold}%</span>
+          </div>
+          <Button
+            onClick={handlePseudoLabel}
+            disabled={pseudoBusy}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold"
+          >
+            {pseudoBusy ? "Ejecutando..." : "Ejecutar pseudo-etiquetado"}
+          </Button>
+          {pseudoResult && (
+            <p className={`text-sm ${pseudoResult.startsWith("Error") ? "text-red-400" : "text-zinc-300"}`}>
+              {pseudoResult}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Model training ───────────────────────────────────────────── */}
+      {datasetStats && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-white text-base">Entrenamiento del modelo</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-zinc-500 text-xs">Aprobados</p>
+                <p className="text-emerald-400 font-bold">{datasetStats.total_approved}</p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-xs">Rechazados</p>
+                <p className="text-red-400 font-bold">{datasetStats.total_rejected}</p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-xs">Total etiquetados</p>
+                <p className="text-white font-bold">{datasetStats.total_labeled}</p>
+              </div>
+            </div>
+            <p className={`text-sm ${datasetStats.can_train ? "text-emerald-400" : "text-yellow-400"}`}>
+              {datasetStats.recommendation}
+            </p>
+            <Button
+              onClick={handleStartTraining}
+              disabled={trainBusy || !datasetStats.can_train}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold disabled:opacity-40"
+            >
+              {trainBusy ? "Iniciando..." : "Iniciar entrenamiento completo"}
+            </Button>
+            {trainResult && (
+              <p className={`text-sm ${trainResult.startsWith("Error") ? "text-red-400" : "text-zinc-300"}`}>
+                {trainResult}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── ML config summary ─────────────────────────────────────────── */}
+      {ml && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-white text-base">Configuracion del detector</CardTitle>
+          </CardHeader>
+          <CardContent className="text-zinc-400 text-sm space-y-1 font-mono">
+            <p><span className="text-zinc-600">Backend:</span> {ml.detector_backend} <span className="text-zinc-600">· v:</span> {ml.model_version}</p>
+            <p><span className="text-zinc-600">Ventana clips:</span> {ml.clip_window_seconds}s</p>
+            <p><span className="text-zinc-600">Auto-aprobar si confianza &gt;=:</span> {ml.auto_approve_confidence}%</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Team approval ─────────────────────────────────────────────── */}
+      <Card className="bg-zinc-900 border-zinc-800">
+        <CardHeader>
+          <CardTitle className="text-white text-base">Equipos pendientes de aprobacion</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
-            <p className="text-red-400 text-sm border border-red-900 rounded-lg px-3 py-2 bg-red-950/30">
-              {error}
-            </p>
+            <p className="text-red-400 text-sm border border-red-900 rounded-lg px-3 py-2 bg-red-950/30">{error}</p>
           )}
           {loading ? (
-            <p className="text-zinc-500 text-sm">Cargando…</p>
+            <p className="text-zinc-500 text-sm">Cargando...</p>
           ) : teams.length === 0 ? (
             <p className="text-zinc-500 text-sm">No hay equipos pendientes.</p>
           ) : (
             <ul className="space-y-3">
               {teams.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl bg-zinc-950 border border-zinc-800"
-                >
+                <li key={t.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl bg-zinc-950 border border-zinc-800">
                   <div>
                     <p className="text-white font-medium">{t.name}</p>
                     <p className="text-zinc-600 text-xs mt-1">
-                      ID {t.id}
-                      {t.requested_at && (
-                        <> · Solicitud: {new Date(t.requested_at).toLocaleString()}</>
-                      )}
+                      ID {t.id}{t.requested_at && <> · {new Date(t.requested_at).toLocaleString()}</>}
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <Button
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                      disabled={busyId === t.id}
-                      onClick={() => approve(t.id)}
-                    >
+                    <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                      disabled={busyId === t.id} onClick={() => approve(t.id)}>
                       Aprobar
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="border-red-900 text-red-400 hover:bg-red-950/40"
-                      disabled={busyId === t.id}
-                      onClick={() => reject(t.id)}
-                    >
+                    <Button variant="outline" className="border-red-900 text-red-400 hover:bg-red-950/40"
+                      disabled={busyId === t.id} onClick={() => reject(t.id)}>
                       Rechazar
                     </Button>
                   </div>
