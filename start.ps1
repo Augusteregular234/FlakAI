@@ -11,7 +11,7 @@ Write-Host "Seeding admin user..." -ForegroundColor Yellow
 # Backend
 Write-Host "Starting backend..." -ForegroundColor Yellow
 Start-Process powershell `
-    -ArgumentList "-NoExit", "-Command", ".\venv\Scripts\python run.py" `
+    -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", ".\venv\Scripts\python run.py" `
     -WorkingDirectory $backendDir `
     -WindowStyle Normal
 
@@ -34,7 +34,7 @@ if ($ready) {
 # Frontend
 Write-Host "Starting frontend..." -ForegroundColor Yellow
 Start-Process powershell `
-    -ArgumentList "-NoExit", "-Command", "npm run dev" `
+    -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", "npm.cmd run dev" `
     -WorkingDirectory $frontendDir `
     -WindowStyle Normal
 
