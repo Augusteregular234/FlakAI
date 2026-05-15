@@ -53,24 +53,27 @@ class ClipSample:
 # DB / JSONL loaders
 # ---------------------------------------------------------------------------
 
-def load_from_db(db_path: str | None = None) -> list[ClipSample]:
+def load_from_db(db_path: str | None = None, manual_only: bool = True) -> list[ClipSample]:
     """
-    Query all reviewed (approved + rejected) clips from the SQLite DB.
+    Query labeled clips from the SQLite DB.
+    manual_only=True (default): only human-reviewed clips (label_source='manual').
+    manual_only=False: also includes pseudo-labeled clips.
     approved → label = event_type class
     rejected → label = 0 (negative)
     """
-    from database import SessionLocal, engine
+    from database import SessionLocal
     import models as m
 
     db = SessionLocal()
     try:
-        rows = (
-            db.query(m.EventClip)
-            .filter(m.EventClip.review_status.in_([
+        query = db.query(m.EventClip).filter(
+            m.EventClip.review_status.in_([
                 m.ReviewStatus.approved, m.ReviewStatus.rejected,
-            ]))
-            .all()
+            ])
         )
+        if manual_only:
+            query = query.filter(m.EventClip.label_source == "manual")
+        rows = query.all()
     finally:
         db.close()
 
