@@ -21,7 +21,7 @@ import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
-CLASSES = ["negative", "goal", "corner", "throw_in", "foul"]
+CLASSES = ["negative", "goal", "corner", "throw_in", "foul", "goal_kick", "shot_on_target"]
 NUM_CLASSES = len(CLASSES)
 CLASS_TO_IDX: dict[str, int] = {c: i for i, c in enumerate(CLASSES)}
 IDX_TO_CLASS: dict[int, str] = {i: c for i, c in enumerate(CLASSES)}
