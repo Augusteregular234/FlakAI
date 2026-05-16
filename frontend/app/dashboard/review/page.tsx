@@ -287,14 +287,16 @@ export default function ReviewPage() {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2 shrink-0">
-        {selectedBatch !== null && selectedBatchData?.status !== "completed" && (
+        {selectedBatch !== null && (
           <Button
             onClick={handleCompleteBatch}
             disabled={completing}
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+            className={selectedBatchData?.status === "completed"
+              ? "bg-zinc-700 hover:bg-emerald-600 text-zinc-300 font-bold"
+              : "bg-emerald-600 hover:bg-emerald-500 text-white font-bold"}
           >
-            {completing ? "..." : "Marcar lote completado"}
+            {completing ? "..." : selectedBatchData?.status === "completed" ? "Completado - Recompletar" : "Marcar lote completado"}
           </Button>
         )}
         <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-400 text-xs"

@@ -58,6 +58,13 @@ def _auto_assign_batches(video_id: int, team_id: int) -> None:
             clip.batch_id = batch.id
             counts[batch.id] += 1
 
+        # Reopen any completed batches that received new clips
+        assigned_batch_ids = {clip.batch_id for clip in unassigned if clip.batch_id}
+        for b in batches:
+            if b.id in assigned_batch_ids and b.status == "completed":
+                b.status = "pending"
+                b.completed_at = None
+
         db.commit()
         logger.info("Auto-assigned %d clips from video %d to %d batches", len(unassigned), video_id, len(batches))
     except Exception as e:
