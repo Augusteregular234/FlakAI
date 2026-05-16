@@ -20,7 +20,8 @@ CLIPS_DIR = os.path.join(os.path.dirname(__file__), "clips")
 # Prevent CPU/RAM exhaustion: at most 2 videos processed concurrently.
 # Each video runs up to 5 FFmpeg clip-extraction jobs sequentially inside
 # its slot, so this caps active FFmpeg processes at 2 at any given time.
-_PROCESSING_SEMAPHORE = asyncio.Semaphore(2)
+_PROCESSING_SEMAPHORE = asyncio.Semaphore(3)
+_CLIP_BATCH = 4  # parallel FFmpeg extractions per video
 
 
 def _auto_assign_batches(video_id: int, team_id: int) -> None:
@@ -126,63 +127,65 @@ async def _do_process(video_id: int) -> None:
         raw_events = detector.detect(video.file_path, duration)
         logger.info("process_video video_id=%s eventos_detectados=%d", video_id, len(raw_events))
 
-        video.processing_events_total = len(raw_events)
+        # Pre-compute clip filenames
+        clip_tasks = []
+        for event_data in raw_events:
+            clip_filename = (
+                f"clip_{video_id}_{int(event_data.timestamp_seconds)}_"
+                f"{event_data.event_type.value}.mp4"
+            )
+            clip_tasks.append((event_data, clip_filename))
+
+        video.processing_events_total = len(clip_tasks)
         db.commit()
 
         clips_ok = 0
         clips_fail = 0
 
-        for i, event_data in enumerate(raw_events):
-            min_s = int(event_data.timestamp_seconds // 60)
-            sec_s = int(event_data.timestamp_seconds % 60)
-            logger.debug(
-                "  evento[%d/%d] tipo=%-10s tiempo=%d'%02d\" confianza=%.1f%%",
-                i + 1, len(raw_events),
-                event_data.event_type.value,
-                min_s, sec_s,
-                event_data.confidence,
-            )
+        # Extract clips in parallel batches — results committed per batch so UI updates live
+        for batch_start in range(0, len(clip_tasks), _CLIP_BATCH):
+            batch = clip_tasks[batch_start:batch_start + _CLIP_BATCH]
 
-            clip_filename = (
-                f"clip_{video_id}_{int(event_data.timestamp_seconds)}_"
-                f"{event_data.event_type.value}.mp4"
-            )
-            clip_path = await asyncio.to_thread(
-                generate_clip,
-                CLIPS_DIR,
-                video.file_path,
-                event_data.timestamp_seconds,
-                clip_filename,
-            )
+            clip_paths = await asyncio.gather(*[
+                asyncio.to_thread(
+                    generate_clip, CLIPS_DIR, video.file_path,
+                    ed.timestamp_seconds, fn,
+                )
+                for ed, fn in batch
+            ])
 
-            if clip_path and os.path.exists(clip_path):
-                clips_ok += 1
-            else:
-                clips_fail += 1
-                logger.warning("process_video: clip no generado para evento[%d] %s@%.1fs", i, event_data.event_type.value, event_data.timestamp_seconds)
+            for (event_data, clip_filename), clip_path in zip(batch, clip_paths):
+                if clip_path and os.path.exists(clip_path):
+                    clips_ok += 1
+                else:
+                    clips_fail += 1
+                    logger.warning(
+                        "clip no generado: %s@%.1fs",
+                        event_data.event_type.value, event_data.timestamp_seconds,
+                    )
 
-            meta = json.dumps(event_data.extra or {}, ensure_ascii=False)
-            review_status = (
-                models.ReviewStatus.approved
-                if event_data.confidence >= settings.auto_approve_confidence
-                else models.ReviewStatus.pending
-            )
+                meta = json.dumps(event_data.extra or {}, ensure_ascii=False)
+                review_status = (
+                    models.ReviewStatus.approved
+                    if event_data.confidence >= settings.auto_approve_confidence
+                    else models.ReviewStatus.pending
+                )
+                db.add(models.EventClip(
+                    video_id=video.id,
+                    team_id=video.team_id,
+                    event_type=event_data.event_type,
+                    timestamp_seconds=event_data.timestamp_seconds,
+                    confidence=event_data.confidence,
+                    clip_path=clip_path,
+                    clip_filename=clip_filename,
+                    review_status=review_status,
+                    model_version=detector.model_version,
+                    detector_metadata=meta,
+                ))
 
-            clip = models.EventClip(
-                video_id=video.id,
-                team_id=video.team_id,
-                event_type=event_data.event_type,
-                timestamp_seconds=event_data.timestamp_seconds,
-                confidence=event_data.confidence,
-                clip_path=clip_path,
-                clip_filename=clip_filename,
-                review_status=review_status,
-                model_version=detector.model_version,
-                detector_metadata=meta,
-            )
-            db.add(clip)
-            video.processing_events_done = i + 1
-            db.commit()  # commit each clip immediately so it appears in the UI
+            video.processing_events_done = batch_start + len(batch)
+            db.commit()  # batch commit — clips appear in UI 4 at a time
+            await asyncio.sleep(0)  # yield to event loop
 
         video.status = models.VideoStatus.completed
         video.processed_at = datetime.utcnow()

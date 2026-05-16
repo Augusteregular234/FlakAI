@@ -32,11 +32,8 @@ def generate_clip(
 ) -> str | None:
     os.makedirs(clips_dir, exist_ok=True)
     clip_path = os.path.join(clips_dir, clip_filename)
-    get_settings.cache_clear()  # evita valor obsoleto tras hot-reload
     s = get_settings()
     window = float(s.clip_window_seconds)
-
-    # Clip empieza en el evento y dura window segundos
     start = max(0.0, event_timestamp)
 
     ffmpeg = resolve_ffmpeg_path()
@@ -50,16 +47,15 @@ def generate_clip(
         _create_dummy_clip(ffmpeg, clip_path)
         return clip_path
 
+    # Stream-copy: no re-encoding — identical quality, ~30x faster.
+    # -ss before -i = fast keyframe seek; clip may start up to ~2s before event.
     cmd = [
         ffmpeg,
         "-y",
         "-ss", str(start),
         "-i", video_path,
         "-t", str(window),
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-c:a", "aac",
+        "-c", "copy",
         "-movflags", "+faststart",
         clip_path,
     ]
