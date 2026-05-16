@@ -115,6 +115,49 @@ def complete_batch(
     return out
 
 
+@router.post("/redistribute")
+def redistribute_clips(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_active_team),
+):
+    """Assign all clips without a batch to existing batches (round-robin by load)."""
+    batches = (
+        db.query(models.LabelingBatch)
+        .filter(models.LabelingBatch.team_id == current_user.team_id)
+        .order_by(models.LabelingBatch.id)
+        .all()
+    )
+    if not batches:
+        raise HTTPException(400, "No hay lotes. Inicializa lotes primero.")
+
+    unassigned = db.query(models.EventClip).filter(
+        models.EventClip.team_id == current_user.team_id,
+        models.EventClip.batch_id.is_(None),
+    ).all()
+
+    if not unassigned:
+        return {"assigned": 0, "message": "No hay clips sin lote."}
+
+    rows = (
+        db.query(models.EventClip.batch_id, func.count(models.EventClip.id))
+        .filter(models.EventClip.batch_id.in_([b.id for b in batches]))
+        .group_by(models.EventClip.batch_id)
+        .all()
+    )
+    counts = {b.id: 0 for b in batches}
+    for bid, cnt in rows:
+        counts[bid] = cnt
+
+    sorted_batches = sorted(batches, key=lambda b: counts[b.id])
+    for i, clip in enumerate(unassigned):
+        batch = sorted_batches[i % len(sorted_batches)]
+        clip.batch_id = batch.id
+        counts[batch.id] += 1
+
+    db.commit()
+    return {"assigned": len(unassigned), "batches_used": len(batches)}
+
+
 @router.get("/{batch_id}/clips", response_model=list[schemas.EventClipOut])
 def get_batch_clips(
     batch_id: int,

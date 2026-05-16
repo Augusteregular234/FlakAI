@@ -23,6 +23,48 @@ CLIPS_DIR = os.path.join(os.path.dirname(__file__), "clips")
 _PROCESSING_SEMAPHORE = asyncio.Semaphore(2)
 
 
+def _auto_assign_batches(video_id: int, team_id: int) -> None:
+    """Round-robin distribute new clips across existing team batches."""
+    db: Session = SessionLocal()
+    try:
+        from sqlalchemy import func
+        batches = db.query(models.LabelingBatch).filter(
+            models.LabelingBatch.team_id == team_id
+        ).order_by(models.LabelingBatch.id).all()
+        if not batches:
+            return
+
+        unassigned = db.query(models.EventClip).filter(
+            models.EventClip.video_id == video_id,
+            models.EventClip.batch_id.is_(None),
+        ).all()
+        if not unassigned:
+            return
+
+        rows = (
+            db.query(models.EventClip.batch_id, func.count(models.EventClip.id))
+            .filter(models.EventClip.batch_id.in_([b.id for b in batches]))
+            .group_by(models.EventClip.batch_id)
+            .all()
+        )
+        counts = {b.id: 0 for b in batches}
+        for bid, cnt in rows:
+            counts[bid] = cnt
+
+        sorted_batches = sorted(batches, key=lambda b: counts[b.id])
+        for i, clip in enumerate(unassigned):
+            batch = sorted_batches[i % len(sorted_batches)]
+            clip.batch_id = batch.id
+            counts[batch.id] += 1
+
+        db.commit()
+        logger.info("Auto-assigned %d clips from video %d to %d batches", len(unassigned), video_id, len(batches))
+    except Exception as e:
+        logger.warning("Auto-assign batches failed for video %d: %s", video_id, e)
+    finally:
+        db.close()
+
+
 async def process_video(video_id: int) -> None:
     # Marcar como en cola antes de esperar el semáforo
     db_q: Session = SessionLocal()
@@ -143,6 +185,9 @@ async def _do_process(video_id: int) -> None:
             "process_video DONE video_id=%s events=%d clips_ok=%d clips_fail=%d model=%s",
             video_id, len(raw_events), clips_ok, clips_fail, detector.model_version,
         )
+
+        # Auto-assign new clips to existing batches
+        _auto_assign_batches(video_id, video.team_id)
 
     except Exception:
         logger.exception("process_video FAILED video_id=%s", video_id)

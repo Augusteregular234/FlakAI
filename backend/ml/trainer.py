@@ -7,12 +7,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
+
+_EPOCH_RE = re.compile(
+    r"Epoch\s+(\d+)/(\d+).*val_f1=([0-9.]+).*\(([0-9.]+)s\)"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +43,10 @@ class TrainingState:
     best_val_f1: float = 0.0
     model_version: int = 0
     error: str = ""
+    current_epoch: int = 0
+    total_epochs: int = 0
+    last_val_f1: float = 0.0
+    last_epoch_seconds: float = 0.0
     logs: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -125,6 +134,12 @@ def _run_training_sync(mode: str, extra_args: list[str]) -> dict:
             line = line.rstrip()
             logger.info("[train] %s", line)
             _state.logs.append(line)
+            m = _EPOCH_RE.search(line)
+            if m:
+                _state.current_epoch = int(m.group(1))
+                _state.total_epochs = int(m.group(2))
+                _state.last_val_f1 = float(m.group(3))
+                _state.last_epoch_seconds = float(m.group(4))
             _state.save()
 
         proc.wait()

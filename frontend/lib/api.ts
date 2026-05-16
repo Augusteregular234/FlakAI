@@ -113,7 +113,7 @@ export const api = {
         `/api/admin/ml/training/start?epochs=${epochs}&lr=${lr}`,
         { method: "POST" }
       ),
-    trainingStatus: () => request<Record<string, unknown>>("/api/admin/ml/training/status"),
+    trainingStatus: () => request<TrainingStatus>("/api/admin/ml/training/status"),
   },
   videos: {
     list: () => request<Video[]>("/api/videos/"),
@@ -169,6 +169,11 @@ export const api = {
     initialize: (n = 10) =>
       request<{ created: number; clips_distributed: number }>(
         `/api/batches/initialize?n=${n}`,
+        { method: "POST" }
+      ),
+    redistribute: () =>
+      request<{ assigned: number; batches_used?: number; message?: string }>(
+        "/api/batches/redistribute",
         { method: "POST" }
       ),
     complete: (id: number) =>
@@ -300,6 +305,22 @@ export interface MlAdminSummary {
   manifest_exists: boolean;
   clip_window_seconds: number;
   auto_approve_confidence: number;
+}
+
+export interface TrainingStatus {
+  status: "idle" | "running" | "done" | "failed";
+  started_at: number;
+  finished_at: number;
+  mode: string;
+  samples: number;
+  best_val_f1: number;
+  model_version: number;
+  error: string;
+  current_epoch: number;
+  total_epochs: number;
+  last_val_f1: number;
+  last_epoch_seconds: number;
+  logs: string[];
 }
 
 export interface DatasetStats {
