@@ -1,19 +1,22 @@
 """
-Training coordinator: launches training scripts as background tasks,
-tracks state, and exposes results to the admin API.
+Training coordinator: launches training scripts as detached subprocesses,
+tracks state via log file polling, and exposes results to the admin API.
+
+Key design: training runs as a DETACHED process (not a child of uvicorn).
+This means uvicorn reloads never kill the training subprocess.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import platform
 import re
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional
 
 _EPOCH_RE = re.compile(
     r"Epoch\s+(\d+)/(\d+).*val_f1=([0-9.]+).*\(([0-9.]+)s\)"
@@ -23,22 +26,21 @@ logger = logging.getLogger(__name__)
 
 REPO = Path(__file__).parent.parent.parent
 MODELS_DIR = REPO / "models"
-# Use the DirectML training venv (Python 3.12 + torch-directml) if available,
-# otherwise fall back to the backend venv (CPU only).
 _DML_PYTHON = REPO / "training" / "training_venv" / "Scripts" / "python.exe"
 _CPU_PYTHON  = REPO / "backend"  / "venv"          / "Scripts" / "python.exe"
 VENV_PYTHON  = _DML_PYTHON if _DML_PYTHON.exists() else _CPU_PYTHON
-STATUS_FILE = MODELS_DIR / "training_status.json"
+STATUS_FILE  = MODELS_DIR / "training_status.json"
 METRICS_FILE = MODELS_DIR / "training_metrics.json"
 HISTORY_FILE = MODELS_DIR / "training_history.json"
+LOG_FILE     = MODELS_DIR / "training_output.log"
 
 
 @dataclass
 class TrainingState:
-    status: str = "idle"        # idle | running | done | failed
+    status: str = "idle"       # idle | running | done | failed
     started_at: float = 0.0
     finished_at: float = 0.0
-    mode: str = ""              # full | incremental
+    mode: str = ""
     samples: int = 0
     best_val_f1: float = 0.0
     model_version: int = 0
@@ -57,17 +59,22 @@ class TrainingState:
         MODELS_DIR.mkdir(exist_ok=True)
         if STATUS_FILE.exists():
             try:
-                return cls(**json.loads(STATUS_FILE.read_text()))
+                data = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+                # Filter to known fields — handles schema evolution gracefully
+                known = set(cls.__dataclass_fields__)
+                return cls(**{k: v for k, v in data.items() if k in known})
             except Exception:
                 pass
         return cls()
 
     def save(self) -> None:
         MODELS_DIR.mkdir(exist_ok=True)
-        STATUS_FILE.write_text(json.dumps(asdict(self), indent=2))
+        STATUS_FILE.write_text(
+            json.dumps(asdict(self), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
 
-# Global state (in-memory, also persisted to disk)
 _state = TrainingState.from_file()
 _lock = asyncio.Lock()
 
@@ -79,7 +86,7 @@ def get_state() -> TrainingState:
 def get_metrics() -> dict:
     if METRICS_FILE.exists():
         try:
-            return json.loads(METRICS_FILE.read_text())
+            return json.loads(METRICS_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
     return {}
@@ -88,7 +95,7 @@ def get_metrics() -> dict:
 def get_history() -> list[dict]:
     if HISTORY_FILE.exists():
         try:
-            return json.loads(HISTORY_FILE.read_text())
+            return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
     return []
@@ -97,94 +104,106 @@ def get_history() -> list[dict]:
 def _append_history(metrics: dict) -> None:
     history = get_history()
     history.append({"timestamp": time.time(), **metrics})
-    HISTORY_FILE.write_text(json.dumps(history[-50:], indent=2))  # keep last 50 runs
+    HISTORY_FILE.write_text(json.dumps(history[-50:], indent=2), encoding="utf-8")
 
 
 def _resolve_python() -> str:
-    if VENV_PYTHON.exists():
-        return str(VENV_PYTHON)
-    return sys.executable
+    return str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
 
 
 def _run_training_sync(mode: str, extra_args: list[str]) -> dict:
     global _state
     python = _resolve_python()
-
-    if mode == "incremental":
-        script = str(REPO / "training" / "incremental_train.py")
-    else:
-        script = str(REPO / "training" / "train.py")
-
+    script = str(REPO / "training" / ("incremental_train.py" if mode == "incremental" else "train.py"))
     cmd = [python, script] + extra_args
+
     logger.info("Starting training subprocess: %s", " ".join(cmd))
+    _state.logs = [f"$ {' '.join(cmd)}"]
 
-    _state.logs = []
-    _state.logs.append(f"$ {' '.join(cmd)}")
+    MODELS_DIR.mkdir(exist_ok=True)
+    log_file = LOG_FILE
+    log_file.write_text("", encoding="utf-8")  # clear previous log
 
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(REPO / "backend"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
+    # Launch as DETACHED process — survives uvicorn reloads
+    popen_kwargs: dict = {
+        "cwd": str(REPO / "backend"),
+        "stdout": open(log_file, "w", encoding="utf-8"),
+        "stderr": subprocess.STDOUT,
+    }
+    if platform.system() == "Windows":
+        popen_kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         )
 
-        for line in proc.stdout:
-            line = line.rstrip()
-            logger.info("[train] %s", line)
-            _state.logs.append(line)
-            m = _EPOCH_RE.search(line)
-            if m:
-                _state.current_epoch = int(m.group(1))
-                _state.total_epochs = int(m.group(2))
-                _state.last_val_f1 = float(m.group(3))
-                _state.last_epoch_seconds = float(m.group(4))
-            _state.save()
-
-        proc.wait()
-
-        if proc.returncode != 0:
-            _state.status = "failed"
-            _state.error = f"Process exited with code {proc.returncode}"
-            _state.finished_at = time.time()
-            _state.save()
-            return {"error": _state.error}
-
-        metrics = get_metrics()
-        _state.status = "done"
-        _state.finished_at = time.time()
-        _state.best_val_f1 = metrics.get("best_val_f1", 0.0)
-        _state.model_version = metrics.get("version", 0)
-        _state.samples = metrics.get("samples_train", 0) + metrics.get("samples_val", 0)
-        _state.save()
-        _append_history(metrics)
-        return metrics
-
+    try:
+        proc = subprocess.Popen(cmd, **popen_kwargs)
     except Exception as e:
         _state.status = "failed"
         _state.error = str(e)
         _state.finished_at = time.time()
         _state.save()
-        logger.exception("Training failed: %s", e)
         return {"error": str(e)}
+
+    # Poll log file while process runs
+    last_pos = 0
+    while proc.poll() is None:
+        time.sleep(3)
+        try:
+            with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                f.seek(last_pos)
+                chunk = f.read()
+                last_pos = f.tell()
+            for line in chunk.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                logger.info("[train] %s", line)
+                _state.logs.append(line)
+                m = _EPOCH_RE.search(line)
+                if m:
+                    _state.current_epoch    = int(m.group(1))
+                    _state.total_epochs     = int(m.group(2))
+                    _state.last_val_f1      = float(m.group(3))
+                    _state.last_epoch_seconds = float(m.group(4))
+            _state.save()
+        except Exception:
+            pass
+
+    # Flush remaining log lines
+    try:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+            f.seek(last_pos)
+            for line in f.read().splitlines():
+                if line.strip():
+                    _state.logs.append(line.strip())
+    except Exception:
+        pass
+
+    rc = proc.returncode
+    if rc != 0:
+        _state.status = "failed"
+        _state.error = f"Process exited with code {rc}"
+        _state.finished_at = time.time()
+        _state.save()
+        return {"error": _state.error}
+
+    metrics = get_metrics()
+    _state.status = "done"
+    _state.finished_at = time.time()
+    _state.best_val_f1 = metrics.get("best_val_f1", 0.0)
+    _state.model_version = metrics.get("version", 0)
+    _state.samples = metrics.get("samples_train", 0) + metrics.get("samples_val", 0)
+    _state.save()
+    _append_history(metrics)
+    return metrics
 
 
 async def start_training(mode: str = "full", extra_args: list[str] | None = None) -> dict:
-    """
-    Start training as an asyncio background task.
-    Returns immediately with {"status": "started"} or {"error": "already_running"}.
-    """
     global _state
     async with _lock:
         if _state.status == "running":
             return {"error": "already_running", "started_at": _state.started_at}
-
-        _state = TrainingState(
-            status="running",
-            started_at=time.time(),
-            mode=mode,
-        )
+        _state = TrainingState(status="running", started_at=time.time(), mode=mode)
         _state.save()
 
     loop = asyncio.get_event_loop()
@@ -193,8 +212,6 @@ async def start_training(mode: str = "full", extra_args: list[str] | None = None
 
 
 class TrainingCoordinator:
-    """FastAPI-injectable coordinator."""
-
     def get_state(self) -> dict:
         return TrainingState.from_file().to_dict()
 
