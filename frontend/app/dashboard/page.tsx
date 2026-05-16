@@ -108,6 +108,7 @@ export default function DashboardPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [batches, setBatches] = useState<LabelingBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -119,6 +120,18 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  const deleteVideo = async (id: number) => {
+    setDeletingId(id);
+    try {
+      await api.videos.delete(id);
+      setVideos((prev) => prev.filter((v) => v.id !== id));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Error al eliminar");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -197,6 +210,17 @@ export default function DashboardPage() {
                         Ver
                       </Button>
                     </Link>
+                  )}
+
+                  {v.status !== "processing" && (
+                    <button
+                      onClick={() => deleteVideo(v.id)}
+                      disabled={deletingId === v.id}
+                      title="Eliminar vídeo"
+                      className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40 text-lg leading-none"
+                    >
+                      {deletingId === v.id ? "..." : "×"}
+                    </button>
                   )}
                 </div>
               </div>

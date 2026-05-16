@@ -139,6 +139,51 @@ async def complete_upload(
     return {"video_id": video.id, "status": "queued"}
 
 
+@router.delete("/{video_id}")
+def delete_video(
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_active_team),
+):
+    """
+    Cancel and delete a video. Allowed for any status except 'processing'
+    (processing videos are mid-FFmpeg — wait for completion or error first).
+    Deletes the DB record and any associated clips.
+    """
+    import shutil
+
+    video = db.query(models.VideoMatch).filter(
+        models.VideoMatch.id == video_id,
+        models.VideoMatch.team_id == current_user.team_id,
+    ).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.status == models.VideoStatus.processing:
+        raise HTTPException(
+            status_code=409,
+            detail="El vídeo se está procesando. Espera a que acabe o falle antes de eliminarlo.",
+        )
+
+    # Delete clip files
+    clips = db.query(models.EventClip).filter(models.EventClip.video_id == video_id).all()
+    for clip in clips:
+        if clip.clip_path and os.path.exists(clip.clip_path):
+            try:
+                os.remove(clip.clip_path)
+            except OSError:
+                pass
+        db.delete(clip)
+
+    # Delete chunk dir if exists
+    chunk_dir = os.path.join(CHUNK_DIR, video.upload_id)
+    if os.path.exists(chunk_dir):
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+
+    db.delete(video)
+    db.commit()
+    return {"deleted": video_id}
+
+
 @router.get("/{video_id}", response_model=schemas.VideoOut)
 def get_video(
     video_id: int,

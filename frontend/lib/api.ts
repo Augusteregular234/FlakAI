@@ -142,6 +142,8 @@ export const api = {
         `/api/videos/upload/${uploadId}/complete`,
         { method: "POST" }
       ),
+    delete: (videoId: number) =>
+      request<{ deleted: number }>(`/api/videos/${videoId}`, { method: "DELETE" }),
   },
   clips: {
     pending: (batchId?: number) =>
