@@ -65,16 +65,22 @@ def _auto_assign_batches(video_id: int, team_id: int) -> None:
         db.close()
 
 
-async def process_video(video_id: int) -> None:
-    # Marcar como en cola antes de esperar el semáforo
-    db_q: Session = SessionLocal()
+def _mark_queued(video_id: int) -> None:
+    db = SessionLocal()
     try:
-        v = db_q.query(models.VideoMatch).filter(models.VideoMatch.id == video_id).first()
-        if v:
+        v = db.query(models.VideoMatch).filter(models.VideoMatch.id == video_id).first()
+        if v and v.status == models.VideoStatus.queued:
+            pass  # already queued, no write needed
+        elif v:
             v.status = models.VideoStatus.queued
-            db_q.commit()
+            db.commit()
     finally:
-        db_q.close()
+        db.close()
+
+
+async def process_video(video_id: int) -> None:
+    # Run DB write in a thread to avoid blocking the event loop
+    await asyncio.to_thread(_mark_queued, video_id)
 
     async with _PROCESSING_SEMAPHORE:
         await _do_process(video_id)
@@ -186,8 +192,8 @@ async def _do_process(video_id: int) -> None:
             video_id, len(raw_events), clips_ok, clips_fail, detector.model_version,
         )
 
-        # Auto-assign new clips to existing batches
-        _auto_assign_batches(video_id, video.team_id)
+        # Auto-assign new clips to existing batches (in thread — avoid blocking event loop)
+        await asyncio.to_thread(_auto_assign_batches, video_id, video.team_id)
 
     except Exception:
         logger.exception("process_video FAILED video_id=%s", video_id)
