@@ -108,10 +108,14 @@ def extract_frames(
             "-q:v", "3",
             out_pat,
         ]
-        r = subprocess.run(cmd, capture_output=True, timeout=60)
-        if r.returncode != 0:
-            logger.warning("ffmpeg frame extraction failed for %s: %s",
-                           clip_path.name, r.stderr[-200:].decode(errors="replace"))
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=90)
+            if r.returncode != 0:
+                logger.warning("ffmpeg frame extraction failed for %s: %s",
+                               clip_path.name, r.stderr[-200:].decode(errors="replace"))
+        except subprocess.TimeoutExpired:
+            logger.warning("extract_frames: ffmpeg timeout (>90s), skipping %s", clip_path.name)
+            return None
 
         frames: list[torch.Tensor] = []
         for i in range(1, n_frames + 2):
