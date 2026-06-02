@@ -50,6 +50,18 @@ partido_final/
 
 ---
 
+## Capturas
+
+**Dashboard** — subida de partidos, progreso de etiquetado en vivo y biblioteca de vídeos analizados.
+
+![Dashboard de FlakAI](docs/screenshots/01-dashboard.png)
+
+| Inicio de sesión | API REST (Swagger) |
+|:---:|:---:|
+| ![Login](docs/screenshots/05-login.png) | ![API REST](docs/screenshots/03-api-docs.png) |
+
+---
+
 ## El problema que resuelve
 
 | Flujo manual | Con FlakAI |
