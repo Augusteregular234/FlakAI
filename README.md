@@ -1,5 +1,7 @@
 <div align="center">
 
+[![Stars](https://img.shields.io/github/stars/NotSaam/FlakAI?style=flat-square&color=a78bfa&logo=github&label=stars)](https://github.com/NotSaam/FlakAI/stargazers) ![Views](https://visitor-badge.laobi.icu/badge?page_id=NotSaam.FlakAI&label=views&color=a78bfa)
+
 # ⚽ FlakAI
 
 ### Análisis Automático de Vídeo de Fútbol con IA
