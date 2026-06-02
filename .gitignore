@@ -45,3 +45,23 @@ backend/regen_log.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Bases de datos (datos reales — nunca publicar)
+*.db
+flak_ai.db
+training/flak_ai.db
+
+# Config / herramientas locales
+.claude/
+.stfolder/
+.ruff_cache/
+CLAUDE.md
+
+# Material de lanzamiento (estrategia interna — no publicar)
+launch-kit/
+README.original.md
+
+# Logs de entrenamiento / runtime
+*.log
+models/training_error.log
+models/training_output.log

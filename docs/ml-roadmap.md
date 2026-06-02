@@ -34,4 +34,4 @@ Objetivo de producto: maximizar acierto en goles, córners, saques de banda y fa
 - Cola de trabajos (Celery/RQ) en lugar de solo `BackgroundTasks` en producción.
 - Almacenamiento de objetos (S3/GCS) y GPU para inferencia si el modelo lo requiere.
 
-Este MVP usa IA simulada; el siguiente paso es registrar predicciones y etiquetas humanas en base de datos para medir de verdad.
+El sistema registra predicciones y etiquetas humanas en base de datos para medir el rendimiento real por clase y alimentar el reentrenamiento.
